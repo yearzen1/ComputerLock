@@ -1,0 +1,5 @@
+.spec
+_pycache/
+build/
+dist/
+config.json

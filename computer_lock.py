@@ -6,19 +6,37 @@ from tkinter import simpledialog, messagebox, ttk
 import threading
 import json
 import os
+from datetime import datetime
 
-class LASTINPUTINFO(ctypes.Structure):
-    _fields_ = [
-        ("cbSize", wintypes.UINT),
-        ("dwTime", wintypes.DWORD),
-    ]
+try:
+    import keyboard
+    HAS_KEYBOARD = True
+except ImportError:
+    HAS_KEYBOARD = False
 
-is_locked = False  # global flag for lock status
+def install_keyboard_block():
+    if not HAS_KEYBOARD:
+        return
+    keyboard.block_key('windows')
+    keyboard.block_key('alt')
+    keyboard.block_key('tab')
+    keyboard.block_key('f4')
+    keyboard.block_key('esc')
+    keyboard.block_key('shift')
+    keyboard.block_key('ctrl')
+    keyboard.block_key('delete')
+    keyboard.block_key('enter')
+
+def uninstall_keyboard_block():
+    if not HAS_KEYBOARD:
+        return
+    keyboard.unhook_all()
+
+is_locked = False
 is_monitoring = False
 monitor_thread = None
 stop_event = threading.Event()
-continuous_usage = 0  # global variable for continuous usage
-lock_request = None  # flag to request lock from main thread
+lock_request = None
 
 CONFIG_FILE = "config.json"
 
@@ -26,7 +44,7 @@ def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, 'r') as f:
             return json.load(f)
-    return {"usage_threshold": 30, "lock_duration": 10, "password": "", "continuous_mode": False}
+    return {"lock_duration": 10, "password": "", "period1_start": "22:00", "period1_end": "23:00", "period2_start": "08:00", "period2_end": "09:00"}
 
 def save_config(config):
     with open(CONFIG_FILE, 'w') as f:
@@ -61,19 +79,10 @@ def ask_password(parent, title, prompt):
     parent.wait_window(dialog)
     return result[0]
 
-def mute_system():
-   pass
-
-def get_idle_time():
-    lii = LASTINPUTINFO()
-    lii.cbSize = ctypes.sizeof(LASTINPUTINFO)
-    ctypes.windll.user32.GetLastInputInfo(ctypes.byref(lii))
-    return (ctypes.windll.kernel32.GetTickCount() - lii.dwTime) / 1000.0
-
 def lock_computer(duration, password):
     global is_locked
     is_locked = True
-    mute_system()  # 静音系统
+    install_keyboard_block()
     # Use Toplevel instead of new Tk() to avoid multiple Tk instances
     lock_window = tk.Toplevel(root)
     # 支持多显示器：使用虚拟屏幕尺寸覆盖所有显示器
@@ -115,9 +124,14 @@ def lock_computer(duration, password):
     def try_unlock():
         pwd = ask_password(lock_window, "解锁", "输入密码：")
         if pwd == password:
+            uninstall_keyboard_block()
             lock_window.destroy()
         else:
             messagebox.showerror("错误", "密码错误。")
+
+    def on_lockDestroy():
+        uninstall_keyboard_block()
+        lock_window.destroy()
 
     button = ttk.Button(main_frame, text="解锁", command=try_unlock, style="Accent.TButton")
     button.pack(pady=(0, 10))
@@ -132,6 +146,7 @@ def lock_computer(duration, password):
             remaining -= 1
             lock_window.after(1000, update_timer)
         else:
+            uninstall_keyboard_block()
             lock_window.destroy()
 
     update_timer()
@@ -139,97 +154,103 @@ def lock_computer(duration, password):
     lock_window.wait_window()
     is_locked = False
 
-def monitor_activity(usage_threshold, lock_duration, password, use_continuous_mode):
-    global is_locked, continuous_usage
-    continuous_usage = 0
+def check_lock_time(period1_start, period1_end, period2_start, period2_end):
+    now = datetime.now()
+    current_minutes = now.hour * 60 + now.minute
+
+    p1_start_mins = parse_time(period1_start)
+    p1_end_mins = parse_time(period1_end)
+    p2_start_mins = parse_time(period2_start)
+    p2_end_mins = parse_time(period2_end)
+
+    in_period1 = False
+    in_period2 = False
+
+    if p1_start_mins <= p1_end_mins:
+        in_period1 = p1_start_mins <= current_minutes < p1_end_mins
+    else:
+        in_period1 = current_minutes >= p1_start_mins or current_minutes < p1_end_mins
+
+    if p2_start_mins <= p2_end_mins:
+        in_period2 = p2_start_mins <= current_minutes < p2_end_mins
+    else:
+        in_period2 = current_minutes >= p2_start_mins or current_minutes < p2_end_mins
+
+    return in_period1 or in_period2
+
+def parse_time(time_str):
+    parts = time_str.split(":")
+    return int(parts[0]) * 60 + int(parts[1])
+
+def monitor_activity(lock_duration, password, period1_start, period1_end, period2_start, period2_end):
+    global is_locked, lock_request
 
     while not stop_event.is_set():
-        if use_continuous_mode:
-            # Continuous usage mode: count as long as not locked
-            if not is_locked:
-                continuous_usage += 60  # add 60 seconds per check
-            else:
-                continuous_usage = 0
+        if check_lock_time(period1_start, period1_end, period2_start, period2_end) and not is_locked:
+            lock_request = (lock_duration, password)
+            time.sleep(70)
         else:
-            # Original mode: based on input activity
-            idle = get_idle_time()
-            if idle < 60:  # if active within last 60 seconds
-                continuous_usage += 60  # add 60 seconds
-            else:
-                continuous_usage = 0
-
-def monitor_activity(usage_threshold, lock_duration, password, use_continuous_mode):
-    global is_locked, continuous_usage, lock_request
-    continuous_usage = 0
-
-    while not stop_event.is_set():
-        if use_continuous_mode:
-            # Continuous usage mode: count as long as not locked
-            if not is_locked:
-                continuous_usage += 60  # add 60 seconds per check
-            else:
-                continuous_usage = 0
-        else:
-            # Original mode: based on input activity
-            idle = get_idle_time()
-            if idle < 60:  # if active within last 60 seconds
-                continuous_usage += 60  # add 60 seconds
-            else:
-                continuous_usage = 0
-
-        if continuous_usage > usage_threshold and not is_locked:
-            lock_request = (lock_duration, password)  # request lock from main thread
-            continuous_usage = 0  # reset after lock
-
-        time.sleep(60)  # check every 60 seconds to save resources
+            time.sleep(60)
 
 def toggle_monitoring():
-    global is_monitoring, monitor_thread
+    global is_monitoring, monitor_thread, lock_entry, pwd_entry, toggle_button, period1_start_entry, period1_end_entry, period2_start_entry, period2_end_entry
     try:
-        usage_min = int(usage_entry.get())
         lock_min = int(lock_entry.get())
         pwd = pwd_entry.get()
-        use_continuous = continuous_var.get()
+        p1_start = period1_start_entry.get()
+        p1_end = period1_end_entry.get()
+        p2_start = period2_start_entry.get()
+        p2_end = period2_end_entry.get()
+
         if not pwd:
-            raise ValueError("Password is required")
-        usage_threshold = usage_min * 60
+            raise ValueError("密码不能为空")
+
+        parse_time(p1_start)
+        parse_time(p1_end)
+        parse_time(p2_start)
+        parse_time(p2_end)
+
         lock_duration = lock_min * 60
-        # Save config
         config = {
-            "usage_threshold": usage_min,
             "lock_duration": lock_min,
             "password": pwd,
-            "continuous_mode": use_continuous
+            "period1_start": p1_start,
+            "period1_end": p1_end,
+            "period2_start": p2_start,
+            "period2_end": p2_end,
         }
         save_config(config)
-        
+
         if not is_monitoring:
-            # Start monitoring
             stop_event.clear()
-            monitor_thread = threading.Thread(target=monitor_activity, args=(usage_threshold, lock_duration, pwd, use_continuous), daemon=True)
+            monitor_thread = threading.Thread(target=monitor_activity, args=(lock_duration, pwd, p1_start, p1_end, p2_start, p2_end), daemon=True)
             monitor_thread.start()
             is_monitoring = True
             toggle_button.config(text="停止监控")
-            root.iconify()  # minimize to taskbar
+            root.iconify()
         else:
-            # Stop monitoring
             stop_event.set()
             if monitor_thread:
                 monitor_thread.join(timeout=2)
             is_monitoring = False
             toggle_button.config(text="开始监控")
     except ValueError as e:
+        messagebox.showerror("错误", "请输入有效的时间格式（HH:MM）")
+    except Exception as e:
         messagebox.showerror("错误", str(e))
 
 def update_usage_label():
-    global continuous_usage, lock_request
-    usage_label.config(text=f"连续使用：{continuous_usage / 60:.0f} 分钟")
-    # Check for lock request from monitor thread
+    global lock_request, status_label
+    config = load_config()
+    current_time = datetime.now().strftime("%H:%M:%S")
+    in_lock_period = check_lock_time(config.get("period1_start", "22:00"), config.get("period1_end", "23:00"), config.get("period2_start", "08:00"), config.get("period2_end", "09:00"))
+    status = "当前在锁定时段内" if in_lock_period else "当前不在锁定时段内"
+    status_label.config(text=f"当前时间：{current_time}\n{status}")
     if lock_request and not is_locked:
         lock_duration, password = lock_request
         lock_request = None
         lock_computer(lock_duration, password)
-    root.after(1000, update_usage_label)  # update every second
+    root.after(1000, update_usage_label)
 
 # Load config
 config = load_config()
@@ -242,31 +263,42 @@ root.eval('tk::PlaceWindow . center')
 style = ttk.Style()
 style.configure("Accent.TButton", font=("Arial", 12, "bold"), padding=10)
 
-ttk.Label(root, text="连续使用阈值（分钟）：").grid(row=0, column=0, padx=10, pady=5)
-usage_entry = ttk.Entry(root)
-usage_entry.insert(0, str(config["usage_threshold"]))
-usage_entry.grid(row=0, column=1, padx=10, pady=5)
-
-ttk.Label(root, text="锁定持续时间（分钟）：").grid(row=1, column=0, padx=10, pady=5)
+ttk.Label(root, text="锁定持续时间（分钟）：").grid(row=0, column=0, padx=10, pady=5)
 lock_entry = ttk.Entry(root)
 lock_entry.insert(0, str(config["lock_duration"]))
-lock_entry.grid(row=1, column=1, padx=10, pady=5)
+lock_entry.grid(row=0, column=1, padx=10, pady=5)
 
-ttk.Label(root, text="密码：").grid(row=2, column=0, padx=10, pady=5)
+ttk.Label(root, text="密码：").grid(row=1, column=0, padx=10, pady=5)
 pwd_entry = ttk.Entry(root, show='*')
 pwd_entry.insert(0, config["password"])
-pwd_entry.grid(row=2, column=1, padx=10, pady=5)
+pwd_entry.grid(row=1, column=1, padx=10, pady=5)
 
-continuous_var = tk.BooleanVar(value=config["continuous_mode"])
-ttk.Checkbutton(root, text="连续使用模式（忽略输入，只要未锁定就计数）", variable=continuous_var).grid(row=3, column=0, columnspan=2, pady=5)
+ttk.Label(root, text="锁定时段1 开始：").grid(row=2, column=0, padx=10, pady=5)
+period1_start_entry = ttk.Entry(root, width=10)
+period1_start_entry.insert(0, config.get("period1_start", "22:00"))
+period1_start_entry.grid(row=2, column=1, padx=10, pady=5, sticky="w")
+
+ttk.Label(root, text="锁定时段1 结束：").grid(row=3, column=0, padx=10, pady=5)
+period1_end_entry = ttk.Entry(root, width=10)
+period1_end_entry.insert(0, config.get("period1_end", "23:00"))
+period1_end_entry.grid(row=3, column=1, padx=10, pady=5, sticky="w")
+
+ttk.Label(root, text="锁定时段2 开始：").grid(row=4, column=0, padx=10, pady=5)
+period2_start_entry = ttk.Entry(root, width=10)
+period2_start_entry.insert(0, config.get("period2_start", "08:00"))
+period2_start_entry.grid(row=4, column=1, padx=10, pady=5, sticky="w")
+
+ttk.Label(root, text="锁定时段2 结束：").grid(row=5, column=0, padx=10, pady=5)
+period2_end_entry = ttk.Entry(root, width=10)
+period2_end_entry.insert(0, config.get("period2_end", "09:00"))
+period2_end_entry.grid(row=5, column=1, padx=10, pady=5, sticky="w")
 
 toggle_button = ttk.Button(root, text="开始监控", command=toggle_monitoring)
-toggle_button.grid(row=4, column=0, columnspan=2, pady=10)
+toggle_button.grid(row=6, column=0, columnspan=2, pady=10)
 
-usage_label = ttk.Label(root, text="连续使用：0 秒", font=("Arial", 12))
-usage_label.grid(row=5, column=0, columnspan=2, pady=5)
+status_label = ttk.Label(root, text="", font=("Arial", 12))
+status_label.grid(row=7, column=0, columnspan=2, pady=5)
 
-# Auto start if password is set
 if config["password"]:
     toggle_monitoring()
 
