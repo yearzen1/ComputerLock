@@ -1,5 +1,7 @@
-.spec
+*.spec
 _pycache/
 build/
 dist/
+config.json
+__pycache__/computer_lock.cpython-312.pyc
 config.json
