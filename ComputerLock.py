@@ -25,7 +25,6 @@ def install_keyboard_block():
     keyboard.block_key('shift')
     keyboard.block_key('ctrl')
     keyboard.block_key('delete')
-    keyboard.block_key('enter')
 
 def uninstall_keyboard_block():
     if not HAS_KEYBOARD:
@@ -72,6 +71,8 @@ def ask_password(parent, title, prompt):
     def on_cancel():
         result[0] = None
         dialog.destroy()
+    entry.bind("<Return>", lambda e: on_ok())
+    entry.focus_set()
     frame = ttk.Frame(dialog)
     frame.pack(pady=10)
     ttk.Button(frame, text="确定", command=on_ok).pack(side=tk.LEFT, padx=5)
@@ -107,6 +108,26 @@ def lock_computer(duration, password):
     # 主框架（使用 tk.Frame 以便设置背景色）
     main_frame = tk.Frame(lock_window, bg="#000000", padx=20, pady=20)
     main_frame.pack(expand=True, fill='both')
+
+    week_days = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+
+    time_label = tk.Label(main_frame, font=("Arial", 36, "bold"), fg="#00ff00", bg="#000000")
+    time_label.pack(pady=(0, 5))
+
+    date_label = tk.Label(main_frame, font=("Arial", 18), fg="#00ff00", bg="#000000")
+    date_label.pack(pady=(0, 5))
+
+    week_label = tk.Label(main_frame, font=("Arial", 18), fg="#00ff00", bg="#000000")
+    week_label.pack(pady=(0, 20))
+
+    def update_datetime():
+        now = datetime.now()
+        time_label.config(text=now.strftime("%H:%M:%S"))
+        date_label.config(text=now.strftime(f"{now.year}年%m月%d日"))
+        week_label.config(text=week_days[now.weekday()])
+        lock_window.after(1000, update_datetime)
+
+    update_datetime()
 
     # 锁图标（用文本模拟）
     lock_label = tk.Label(main_frame, text="🔒", font=("Arial", 48), bg="#000000", fg="#ffffff")
@@ -182,11 +203,19 @@ def parse_time(time_str):
     parts = time_str.split(":")
     return int(parts[0]) * 60 + int(parts[1])
 
-def monitor_activity(lock_duration, password, period1_start, period1_end, period2_start, period2_end):
+def monitor_activity():
     global is_locked, lock_request
 
     while not stop_event.is_set():
-        if check_lock_time(period1_start, period1_end, period2_start, period2_end) and not is_locked:
+        config = load_config()
+        p1_start = config.get("period1_start", "22:00")
+        p1_end = config.get("period1_end", "23:00")
+        p2_start = config.get("period2_start", "08:00")
+        p2_end = config.get("period2_end", "09:00")
+        lock_duration = config.get("lock_duration", 10) * 60
+        password = config.get("password", "")
+
+        if check_lock_time(p1_start, p1_end, p2_start, p2_end) and not is_locked:
             lock_request = (lock_duration, password)
             time.sleep(70)
         else:
@@ -223,7 +252,7 @@ def toggle_monitoring():
 
         if not is_monitoring:
             stop_event.clear()
-            monitor_thread = threading.Thread(target=monitor_activity, args=(lock_duration, pwd, p1_start, p1_end, p2_start, p2_end), daemon=True)
+            monitor_thread = threading.Thread(target=monitor_activity, daemon=True)
             monitor_thread.start()
             is_monitoring = True
             toggle_button.config(text="停止监控")
