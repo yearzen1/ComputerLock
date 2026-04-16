@@ -182,11 +182,19 @@ def parse_time(time_str):
     parts = time_str.split(":")
     return int(parts[0]) * 60 + int(parts[1])
 
-def monitor_activity(lock_duration, password, period1_start, period1_end, period2_start, period2_end):
+def monitor_activity():
     global is_locked, lock_request
 
     while not stop_event.is_set():
-        if check_lock_time(period1_start, period1_end, period2_start, period2_end) and not is_locked:
+        config = load_config()
+        p1_start = config.get("period1_start", "22:00")
+        p1_end = config.get("period1_end", "23:00")
+        p2_start = config.get("period2_start", "08:00")
+        p2_end = config.get("period2_end", "09:00")
+        lock_duration = config.get("lock_duration", 10) * 60
+        password = config.get("password", "")
+
+        if check_lock_time(p1_start, p1_end, p2_start, p2_end) and not is_locked:
             lock_request = (lock_duration, password)
             time.sleep(70)
         else:
@@ -223,7 +231,7 @@ def toggle_monitoring():
 
         if not is_monitoring:
             stop_event.clear()
-            monitor_thread = threading.Thread(target=monitor_activity, args=(lock_duration, pwd, p1_start, p1_end, p2_start, p2_end), daemon=True)
+            monitor_thread = threading.Thread(target=monitor_activity, daemon=True)
             monitor_thread.start()
             is_monitoring = True
             toggle_button.config(text="停止监控")
