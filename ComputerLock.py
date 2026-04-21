@@ -147,6 +147,10 @@ def lock_computer(duration, password):
         if pwd == password:
             uninstall_keyboard_block()
             lock_window.destroy()
+            if root.state() == 'iconic':
+                root.deiconify()
+            if is_monitoring:
+                toggle_monitoring()
         else:
             messagebox.showerror("错误", "密码错误。")
 
