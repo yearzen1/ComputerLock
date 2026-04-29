@@ -36,17 +36,44 @@ is_monitoring = False
 monitor_thread = None
 stop_event = threading.Event()
 lock_request = None
+current_mode = "lock_period"
 
-CONFIG_FILE = "config.json"
+CONFIG_FILES = {
+    "lock_period": "config_lock_period.json",
+    "unlock_period": "config_unlock_period.json"
+}
 
-def load_config():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, 'r') as f:
+DEFAULT_CONFIG = {"lock_duration": 10, "password": "", "period1_start": "22:00", "period1_end": "23:00", "period2_start": "08:00", "period2_end": "09:00"}
+
+def get_config_file(mode):
+    return CONFIG_FILES.get(mode, "config_lock_period.json")
+
+def migrate_old_config():
+    old_file = "config.json"
+    if os.path.exists(old_file):
+        with open(old_file, 'r') as f:
+            old_config = json.load(f)
+        new_file = get_config_file("lock_period")
+        if not os.path.exists(new_file):
+            with open(new_file, 'w') as f:
+                json.dump(old_config, f)
+        os.remove(old_file)
+
+def load_config(mode="lock_period"):
+    config_file = get_config_file(mode)
+    if os.path.exists(config_file):
+        with open(config_file, 'r') as f:
             return json.load(f)
-    return {"lock_duration": 10, "password": "", "period1_start": "22:00", "period1_end": "23:00", "period2_start": "08:00", "period2_end": "09:00"}
+    other_mode = "unlock_period" if mode == "lock_period" else "lock_period"
+    other_file = get_config_file(other_mode)
+    if os.path.exists(other_file):
+        with open(other_file, 'r') as f:
+            return json.load(f)
+    return DEFAULT_CONFIG.copy()
 
-def save_config(config):
-    with open(CONFIG_FILE, 'w') as f:
+def save_config(config, mode="lock_period"):
+    config_file = get_config_file(mode)
+    with open(config_file, 'w') as f:
         json.dump(config, f)
 
 def ask_password(parent, title, prompt):
@@ -179,39 +206,47 @@ def lock_computer(duration, password):
     lock_window.wait_window()
     is_locked = False
 
-def check_lock_time(period1_start, period1_end, period2_start, period2_end):
+def check_lock_time(period1_start, period1_end, period2_start, period2_end, mode="lock_period"):
     now = datetime.now()
     current_minutes = now.hour * 60 + now.minute
+
+    def parse_time(t):
+        if not t:
+            return None
+        parts = t.split(":")
+        return int(parts[0]) * 60 + int(parts[1])
 
     p1_start_mins = parse_time(period1_start)
     p1_end_mins = parse_time(period1_end)
     p2_start_mins = parse_time(period2_start)
     p2_end_mins = parse_time(period2_end)
 
-    in_period1 = False
-    in_period2 = False
+    def in_period(start_mins, end_mins):
+        if start_mins is None or end_mins is None:
+            return False
+        if start_mins <= end_mins:
+            return start_mins <= current_minutes < end_mins
+        else:
+            return current_minutes >= start_mins or current_minutes < end_mins
 
-    if p1_start_mins <= p1_end_mins:
-        in_period1 = p1_start_mins <= current_minutes < p1_end_mins
-    else:
-        in_period1 = current_minutes >= p1_start_mins or current_minutes < p1_end_mins
+    in_period1 = in_period(p1_start_mins, p1_end_mins)
+    in_period2 = in_period(p2_start_mins, p2_end_mins)
 
-    if p2_start_mins <= p2_end_mins:
-        in_period2 = p2_start_mins <= current_minutes < p2_end_mins
-    else:
-        in_period2 = current_minutes >= p2_start_mins or current_minutes < p2_end_mins
-
+    if mode == "unlock_period":
+        return not in_period1 and not in_period2
     return in_period1 or in_period2
 
 def parse_time(time_str):
+    if not time_str:
+        return None
     parts = time_str.split(":")
     return int(parts[0]) * 60 + int(parts[1])
 
 def monitor_activity():
-    global is_locked, lock_request
+    global is_locked, lock_request, current_mode
 
     while not stop_event.is_set():
-        config = load_config()
+        config = load_config(current_mode)
         p1_start = config.get("period1_start", "22:00")
         p1_end = config.get("period1_end", "23:00")
         p2_start = config.get("period2_start", "08:00")
@@ -219,14 +254,14 @@ def monitor_activity():
         lock_duration = config.get("lock_duration", 10) * 60
         password = config.get("password", "")
 
-        if check_lock_time(p1_start, p1_end, p2_start, p2_end) and not is_locked:
+        if check_lock_time(p1_start, p1_end, p2_start, p2_end, current_mode) and not is_locked:
             lock_request = (lock_duration, password)
             time.sleep(70)
         else:
             time.sleep(60)
 
 def toggle_monitoring():
-    global is_monitoring, monitor_thread, lock_entry, pwd_entry, toggle_button, period1_start_entry, period1_end_entry, period2_start_entry, period2_end_entry
+    global is_monitoring, monitor_thread, lock_entry, pwd_entry, toggle_button, period1_start_entry, period1_end_entry, period2_start_entry, period2_end_entry, mode_combo, current_mode
     try:
         lock_min = int(lock_entry.get())
         pwd = pwd_entry.get()
@@ -234,14 +269,15 @@ def toggle_monitoring():
         p1_end = period1_end_entry.get()
         p2_start = period2_start_entry.get()
         p2_end = period2_end_entry.get()
+        mode_val = mode_combo.get()
+        current_mode = "lock_period" if mode_val == "锁定时段内" else "unlock_period"
 
         if not pwd:
             raise ValueError("密码不能为空")
 
-        parse_time(p1_start)
-        parse_time(p1_end)
-        parse_time(p2_start)
-        parse_time(p2_end)
+        for t in [p1_start, p1_end, p2_start, p2_end]:
+            if t:
+                parse_time(t)
 
         lock_duration = lock_min * 60
         config = {
@@ -252,7 +288,7 @@ def toggle_monitoring():
             "period2_start": p2_start,
             "period2_end": p2_end,
         }
-        save_config(config)
+        save_config(config, current_mode)
 
         if not is_monitoring:
             stop_event.clear()
@@ -273,11 +309,20 @@ def toggle_monitoring():
         messagebox.showerror("错误", str(e))
 
 def update_usage_label():
-    global lock_request, status_label
-    config = load_config()
+    global lock_request, status_label, current_mode
+    config = load_config(current_mode)
     current_time = datetime.now().strftime("%H:%M:%S")
-    in_lock_period = check_lock_time(config.get("period1_start", "22:00"), config.get("period1_end", "23:00"), config.get("period2_start", "08:00"), config.get("period2_end", "09:00"))
-    status = "当前在锁定时段内" if in_lock_period else "当前不在锁定时段内"
+    in_lock_period = check_lock_time(
+        config.get("period1_start", "22:00"),
+        config.get("period1_end", "23:00"),
+        config.get("period2_start", "08:00"),
+        config.get("period2_end", "09:00"),
+        current_mode
+    )
+    if current_mode == "unlock_period":
+        status = "当前在免锁定时段外（应锁屏）" if in_lock_period else "当前在免锁定时段内（不锁屏）"
+    else:
+        status = "当前在锁定时段内（应锁屏）" if in_lock_period else "当前不在锁定时段内"
     status_label.config(text=f"当前时间：{current_time}\n{status}")
     if lock_request and not is_locked:
         lock_duration, password = lock_request
@@ -286,7 +331,8 @@ def update_usage_label():
     root.after(1000, update_usage_label)
 
 # Load config
-config = load_config()
+migrate_old_config()
+config = load_config("lock_period")
 
 root = tk.Tk()
 root.title("电脑锁定设置")
@@ -306,31 +352,61 @@ pwd_entry = ttk.Entry(root, show='*')
 pwd_entry.insert(0, config["password"])
 pwd_entry.grid(row=1, column=1, padx=10, pady=5)
 
-ttk.Label(root, text="锁定时段1 开始：").grid(row=2, column=0, padx=10, pady=5)
+ttk.Label(root, text="锁定模式：").grid(row=2, column=0, padx=10, pady=5)
+mode_combo = ttk.Combobox(root, values=["锁定时段内", "锁定时段外"], state="readonly", width=18)
+mode_combo.set("锁定时段内")
+mode_combo.grid(row=2, column=1, padx=10, pady=5, sticky="w")
+
+def on_mode_change(event):
+    global current_mode
+    new_mode = "lock_period" if mode_combo.get() == "锁定时段内" else "unlock_period"
+    if new_mode != current_mode:
+        current_mode = new_mode
+        load_settings_from_config()
+
+mode_combo.bind("<<ComboboxSelected>>", on_mode_change)
+
+def load_settings_from_config():
+    cfg = load_config(current_mode)
+    lock_entry.delete(0, tk.END)
+    lock_entry.insert(0, str(cfg.get("lock_duration", 10)))
+    pwd_entry.delete(0, tk.END)
+    pwd_entry.insert(0, cfg.get("password", ""))
+    period1_start_entry.delete(0, tk.END)
+    period1_start_entry.insert(0, cfg.get("period1_start", "22:00"))
+    period1_end_entry.delete(0, tk.END)
+    period1_end_entry.insert(0, cfg.get("period1_end", "23:00"))
+    period2_start_entry.delete(0, tk.END)
+    period2_start_entry.insert(0, cfg.get("period2_start", "08:00"))
+    period2_end_entry.delete(0, tk.END)
+    period2_end_entry.insert(0, cfg.get("period2_end", "09:00"))
+    lock_entry.focus_set()
+
+ttk.Label(root, text="锁定时段1 开始：").grid(row=3, column=0, padx=10, pady=5)
 period1_start_entry = ttk.Entry(root, width=10)
 period1_start_entry.insert(0, config.get("period1_start", "22:00"))
-period1_start_entry.grid(row=2, column=1, padx=10, pady=5, sticky="w")
+period1_start_entry.grid(row=3, column=1, padx=10, pady=5, sticky="w")
 
-ttk.Label(root, text="锁定时段1 结束：").grid(row=3, column=0, padx=10, pady=5)
+ttk.Label(root, text="锁定时段1 结束：").grid(row=4, column=0, padx=10, pady=5)
 period1_end_entry = ttk.Entry(root, width=10)
 period1_end_entry.insert(0, config.get("period1_end", "23:00"))
-period1_end_entry.grid(row=3, column=1, padx=10, pady=5, sticky="w")
+period1_end_entry.grid(row=4, column=1, padx=10, pady=5, sticky="w")
 
-ttk.Label(root, text="锁定时段2 开始：").grid(row=4, column=0, padx=10, pady=5)
+ttk.Label(root, text="锁定时段2 开始：").grid(row=5, column=0, padx=10, pady=5)
 period2_start_entry = ttk.Entry(root, width=10)
 period2_start_entry.insert(0, config.get("period2_start", "08:00"))
-period2_start_entry.grid(row=4, column=1, padx=10, pady=5, sticky="w")
+period2_start_entry.grid(row=5, column=1, padx=10, pady=5, sticky="w")
 
-ttk.Label(root, text="锁定时段2 结束：").grid(row=5, column=0, padx=10, pady=5)
+ttk.Label(root, text="锁定时段2 结束：").grid(row=6, column=0, padx=10, pady=5)
 period2_end_entry = ttk.Entry(root, width=10)
 period2_end_entry.insert(0, config.get("period2_end", "09:00"))
-period2_end_entry.grid(row=5, column=1, padx=10, pady=5, sticky="w")
+period2_end_entry.grid(row=6, column=1, padx=10, pady=5, sticky="w")
 
 toggle_button = ttk.Button(root, text="开始监控", command=toggle_monitoring)
-toggle_button.grid(row=6, column=0, columnspan=2, pady=10)
+toggle_button.grid(row=7, column=0, columnspan=2, pady=10)
 
 status_label = ttk.Label(root, text="", font=("Arial", 12))
-status_label.grid(row=7, column=0, columnspan=2, pady=5)
+status_label.grid(row=8, column=0, columnspan=2, pady=5)
 
 if config["password"]:
     toggle_monitoring()

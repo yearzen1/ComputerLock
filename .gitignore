@@ -2,6 +2,5 @@
 _pycache/
 build/
 dist/
-config.json
+*.json
 __pycache__/computer_lock.cpython-312.pyc
-config.json
