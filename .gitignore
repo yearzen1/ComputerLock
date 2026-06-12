@@ -1,6 +1,7 @@
 *.spec
-_pycache/
+__pycache__/
 build/
 dist/
 *.json
-__pycache__/computer_lock.cpython-312.pyc
+AGENTS.md
+lock_debug.log

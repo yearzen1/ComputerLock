@@ -1,71 +1,62 @@
 # Computer Lock
 
-一个用于监控计算机使用时间并在超过阈值时自动锁定的Python应用程序。
+一个根据预设时间段自动锁定计算机的 Python 应用程序。
 
-A Python application that monitors computer usage time and automatically locks the computer when the threshold is exceeded.
+A Python application that locks your computer during configurable time periods.
 
 ## 功能特性 / Features
 
-- **使用时间监控** / **Usage Time Monitoring**: 监控连续使用时间或基于输入活动的使用时间。
-- **自动锁定** / **Auto Lock**: 当使用时间超过设置的阈值时，自动锁定计算机。
-- **密码解锁** / **Password Unlock**: 使用密码解锁计算机。
-- **定时解锁** / **Timed Unlock**: 设置锁定持续时间，时间到自动解锁。
-- **GUI设置界面** / **GUI Settings Interface**: 易用的图形界面进行配置。
-- **连续模式** / **Continuous Mode**: 忽略输入活动，持续计数使用时间。
+- **时段锁定** — 两种模式：指定时段内锁定 / 指定时段外锁定，每个模式支持两个时间段（支持跨天）
+- **全屏锁定** — 多显示器全屏锁定窗口，显示实时时间、日期、星期
+- **密码解锁** — 密码保护，支持自动倒计时解锁
+- **进程白名单** — 白名单程序在前台时自动隐藏锁屏，切换回非白名单程序时自动重新锁定
+- **键盘屏蔽** — 可选拦截 Win/Alt/Tab/Esc/F4/Shift/Ctrl/Delete（需 `keyboard` 库）
+- **白名单启动按钮** — 锁屏界面可直接启动白名单程序
+- **配置自动迁移** — 旧版 `config.json` 自动迁移至新版配置文件
 
 ## 安装 / Installation
 
-1. 确保安装了Python 3.x。
-2. 下载或克隆此仓库。
-3. 运行 `computer_lock.py`。
-
-Ensure Python 3.x is installed.
-Download or clone this repository.
-Run `computer_lock.py`.
+```bash
+pip install keyboard  # 可选，键盘屏蔽需要
+python ComputerLock.py
+```
 
 ## 使用 / Usage
 
-1. 运行脚本后，会弹出设置界面。
-2. 配置使用阈值（分钟）、锁定持续时间（分钟）和密码。
-3. 选择是否启用连续模式。
-4. 点击“开始监控”按钮。
-5. 应用程序会最小化到任务栏，开始监控。
+1. 运行 `python ComputerLock.py` 打开设置界面
+2. 选择模式（"锁定时段内" / "锁定时段外"），配置时间段、锁定时长、密码
+3. 添加进程白名单（支持 exe 名或完整路径）
+4. 点击"开始监控"，程序最小化至托盘开始监控
+5. 锁屏界面输入密码解锁，或等待自动解锁
 
-Run the script, configure settings in the GUI, and start monitoring.
+## 配置文件 / Configuration
 
-## 配置 / Configuration
+两种模式各自独立配置文件：
 
-配置保存在 `config.json` 文件中：
+- `config_lock_period.json` — 锁定时段内模式
+- `config_unlock_period.json` — 锁定时段外模式
 
-- `usage_threshold`: 使用阈值（分钟）
-- `lock_duration`: 锁定持续时间（分钟）
-- `password`: 解锁密码
-- `continuous_mode`: 是否启用连续模式
+| 字段 | 说明 |
+|------|------|
+| `lock_duration` | 锁定持续时间（分钟） |
+| `password` | 解锁密码 |
+| `period1_start` / `period1_end` | 时段1起止（HH:MM） |
+| `period2_start` / `period2_end` | 时段2起止（HH:MM） |
+| `whitelist` | 白名单进程名列表 |
 
-Configuration is saved in `config.json`:
+## 构建 / Build
 
-- `usage_threshold`: Usage threshold (minutes)
-- `lock_duration`: Lock duration (minutes)
-- `password`: Unlock password
-- `continuous_mode`: Enable continuous mode
+```bash
+pyinstaller ComputerLock.spec
+```
 
-## 截图 / Screenshots
-
-### 设置界面 / Settings Interface
-![设置界面](setting.png)
-
-### 锁定屏幕 / Lock Screen
-![锁定屏幕](lock.png)
+生成 `dist/ComputerLock.exe`（无控制台窗口）。
 
 ## 注意事项 / Notes
 
-- 此应用程序仅适用于Windows系统。
-- 确保密码安全，不要遗忘。
-- 锁定期间，计算机将显示全屏锁定窗口。
-
-This application is for Windows only.
-Keep your password secure.
-During lock, a full-screen lock window will be displayed.
+- Windows 专用，依赖 `pywin32`（通过 `ctypes.windll`）
+- 需管理员权限运行才能生效键盘屏蔽
+- 白名单匹配不区分大小写，自动去除路径前缀和引号
 
 ## 许可证 / License
 

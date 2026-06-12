@@ -1,35 +1,15 @@
 import time
-import ctypes
-from ctypes import wintypes
-import tkinter as tk
-from tkinter import simpledialog, messagebox, ttk
 import threading
-import json
-import os
+import tkinter as tk
+from tkinter import messagebox, ttk
 from datetime import datetime
 
-try:
-    import keyboard
-    HAS_KEYBOARD = True
-except ImportError:
-    HAS_KEYBOARD = False
-
-def install_keyboard_block():
-    if not HAS_KEYBOARD:
-        return
-    keyboard.block_key('windows')
-    keyboard.block_key('alt')
-    keyboard.block_key('tab')
-    keyboard.block_key('f4')
-    keyboard.block_key('esc')
-    keyboard.block_key('shift')
-    keyboard.block_key('ctrl')
-    keyboard.block_key('delete')
-
-def uninstall_keyboard_block():
-    if not HAS_KEYBOARD:
-        return
-    keyboard.unhook_all()
+from config import migrate_old_config, load_config, save_config
+from process_util import (
+    SELF_EXE, normalize_process_name, get_foreground_process_name,
+    is_whitelisted_foreground
+)
+from lock_screen import lock_computer
 
 is_locked = False
 is_monitoring = False
@@ -37,174 +17,8 @@ monitor_thread = None
 stop_event = threading.Event()
 lock_request = None
 current_mode = "lock_period"
+whitelist = []
 
-CONFIG_FILES = {
-    "lock_period": "config_lock_period.json",
-    "unlock_period": "config_unlock_period.json"
-}
-
-DEFAULT_CONFIG = {"lock_duration": 10, "password": "", "period1_start": "22:00", "period1_end": "23:00", "period2_start": "08:00", "period2_end": "09:00"}
-
-def get_config_file(mode):
-    return CONFIG_FILES.get(mode, "config_lock_period.json")
-
-def migrate_old_config():
-    old_file = "config.json"
-    if os.path.exists(old_file):
-        with open(old_file, 'r') as f:
-            old_config = json.load(f)
-        new_file = get_config_file("lock_period")
-        if not os.path.exists(new_file):
-            with open(new_file, 'w') as f:
-                json.dump(old_config, f)
-        os.remove(old_file)
-
-def load_config(mode="lock_period"):
-    config_file = get_config_file(mode)
-    if os.path.exists(config_file):
-        with open(config_file, 'r') as f:
-            return json.load(f)
-    other_mode = "unlock_period" if mode == "lock_period" else "lock_period"
-    other_file = get_config_file(other_mode)
-    if os.path.exists(other_file):
-        with open(other_file, 'r') as f:
-            return json.load(f)
-    return DEFAULT_CONFIG.copy()
-
-def save_config(config, mode="lock_period"):
-    config_file = get_config_file(mode)
-    with open(config_file, 'w') as f:
-        json.dump(config, f)
-
-def ask_password(parent, title, prompt):
-    dialog = tk.Toplevel(parent)
-    dialog.title(title)
-    window_width = 300
-    window_height = 150
-    screen_width = dialog.winfo_screenwidth()
-    screen_height = dialog.winfo_screenheight()
-    x = (screen_width - window_width) // 2
-    y = (screen_height - window_height) // 2
-    dialog.geometry(f"{window_width}x{window_height}+{x}+{y}")
-    dialog.transient(parent)
-    dialog.grab_set()
-    ttk.Label(dialog, text=prompt).pack(pady=10)
-    entry = ttk.Entry(dialog, show='*')
-    entry.pack(pady=5)
-    result = [None]
-    def on_ok():
-        result[0] = entry.get()
-        dialog.destroy()
-    def on_cancel():
-        result[0] = None
-        dialog.destroy()
-    entry.bind("<Return>", lambda e: on_ok())
-    entry.focus_set()
-    frame = ttk.Frame(dialog)
-    frame.pack(pady=10)
-    ttk.Button(frame, text="确定", command=on_ok).pack(side=tk.LEFT, padx=5)
-    ttk.Button(frame, text="取消", command=on_cancel).pack(side=tk.LEFT, padx=5)
-    parent.wait_window(dialog)
-    return result[0]
-
-def lock_computer(duration, password):
-    global is_locked
-    is_locked = True
-    install_keyboard_block()
-    # Use Toplevel instead of new Tk() to avoid multiple Tk instances
-    lock_window = tk.Toplevel(root)
-    # 支持多显示器：使用虚拟屏幕尺寸覆盖所有显示器
-    SM_CXVIRTUALSCREEN = 78
-    SM_CYVIRTUALSCREEN = 79
-    SM_XVIRTUALSCREEN = 76
-    SM_YVIRTUALSCREEN = 77
-    try:
-        vwidth = ctypes.windll.user32.GetSystemMetrics(SM_CXVIRTUALSCREEN)
-        vheight = ctypes.windll.user32.GetSystemMetrics(SM_CYVIRTUALSCREEN)
-        vleft = ctypes.windll.user32.GetSystemMetrics(SM_XVIRTUALSCREEN)
-        vtop = ctypes.windll.user32.GetSystemMetrics(SM_YVIRTUALSCREEN)
-        lock_window.geometry(f"{vwidth}x{vheight}+{vleft}+{vtop}")
-    except Exception:
-        # 回退到单显示器全屏
-        lock_window.geometry(f"{lock_window.winfo_screenwidth()}x{lock_window.winfo_screenheight()}+0+0")
-    lock_window.overrideredirect(True)  # remove window decorations to disable minimize, drag, close
-    lock_window.attributes("-topmost", True)
-    lock_window.configure(bg="#000000")  # 现代深色背景
-    lock_window.title("已锁定")
-
-    # 主框架（使用 tk.Frame 以便设置背景色）
-    main_frame = tk.Frame(lock_window, bg="#000000", padx=20, pady=20)
-    main_frame.pack(expand=True, fill='both')
-
-    week_days = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
-
-    time_label = tk.Label(main_frame, font=("Arial", 36, "bold"), fg="#00ff00", bg="#000000")
-    time_label.pack(pady=(0, 5))
-
-    date_label = tk.Label(main_frame, font=("Arial", 18), fg="#00ff00", bg="#000000")
-    date_label.pack(pady=(0, 5))
-
-    week_label = tk.Label(main_frame, font=("Arial", 18), fg="#00ff00", bg="#000000")
-    week_label.pack(pady=(0, 20))
-
-    def update_datetime():
-        now = datetime.now()
-        time_label.config(text=now.strftime("%H:%M:%S"))
-        date_label.config(text=now.strftime(f"{now.year}年%m月%d日"))
-        week_label.config(text=week_days[now.weekday()])
-        lock_window.after(1000, update_datetime)
-
-    update_datetime()
-
-    # 锁图标（用文本模拟）
-    lock_label = tk.Label(main_frame, text="🔒", font=("Arial", 48), bg="#000000", fg="#ffffff")
-    lock_label.pack(pady=(0, 10))
-
-    # 锁定消息
-    label = tk.Label(main_frame, text="电脑已锁定。输入密码解锁。", font=("Arial", 16, "bold"), fg="#ffffff", bg="#000000")
-    label.pack(pady=(0, 20))
-
-    # 计时器
-    timer_label = tk.Label(main_frame, text="", font=("Arial", 14), fg="#ffffff", bg="#000000")
-    timer_label.pack(pady=(0, 20))
-
-    # 解锁按钮
-    def try_unlock():
-        pwd = ask_password(lock_window, "解锁", "输入密码：")
-        if pwd == password:
-            uninstall_keyboard_block()
-            lock_window.destroy()
-            if root.state() == 'iconic':
-                root.deiconify()
-            if is_monitoring:
-                toggle_monitoring()
-        else:
-            messagebox.showerror("错误", "密码错误。")
-
-    def on_lockDestroy():
-        uninstall_keyboard_block()
-        lock_window.destroy()
-
-    button = ttk.Button(main_frame, text="解锁", command=try_unlock, style="Accent.TButton")
-    button.pack(pady=(0, 10))
-
-    remaining = duration
-    def update_timer():
-        nonlocal remaining
-        if remaining > 0:
-            mins = remaining // 60
-            secs = remaining % 60
-            timer_label.config(text=f"自动解锁剩余 {mins} 分钟 {secs} 秒")
-            remaining -= 1
-            lock_window.after(1000, update_timer)
-        else:
-            uninstall_keyboard_block()
-            lock_window.destroy()
-
-    update_timer()
-    # Wait for window to be destroyed
-    lock_window.wait_window()
-    is_locked = False
 
 def check_lock_time(period1_start, period1_end, period2_start, period2_end, mode="lock_period"):
     now = datetime.now()
@@ -236,11 +50,13 @@ def check_lock_time(period1_start, period1_end, period2_start, period2_end, mode
         return not in_period1 and not in_period2
     return in_period1 or in_period2
 
+
 def parse_time(time_str):
     if not time_str:
         return None
     parts = time_str.split(":")
     return int(parts[0]) * 60 + int(parts[1])
+
 
 def monitor_activity():
     global is_locked, lock_request, current_mode
@@ -253,15 +69,20 @@ def monitor_activity():
         p2_end = config.get("period2_end", "09:00")
         lock_duration = config.get("lock_duration", 10) * 60
         password = config.get("password", "")
+        whitelist = config.get("whitelist", [])
 
         if check_lock_time(p1_start, p1_end, p2_start, p2_end, current_mode) and not is_locked:
-            lock_request = (lock_duration, password)
-            time.sleep(70)
+            if is_whitelisted_foreground(whitelist):
+                time.sleep(60)
+            else:
+                lock_request = (lock_duration, password)
+                time.sleep(70)
         else:
             time.sleep(60)
 
+
 def toggle_monitoring():
-    global is_monitoring, monitor_thread, lock_entry, pwd_entry, toggle_button, period1_start_entry, period1_end_entry, period2_start_entry, period2_end_entry, mode_combo, current_mode
+    global is_monitoring, monitor_thread, lock_entry, pwd_entry, toggle_button, period1_start_entry, period1_end_entry, period2_start_entry, period2_end_entry, mode_combo, current_mode, whitelist
     try:
         lock_min = int(lock_entry.get())
         pwd = pwd_entry.get()
@@ -287,6 +108,7 @@ def toggle_monitoring():
             "period1_end": p1_end,
             "period2_start": p2_start,
             "period2_end": p2_end,
+            "whitelist": whitelist,
         }
         save_config(config, current_mode)
 
@@ -308,8 +130,9 @@ def toggle_monitoring():
     except Exception as e:
         messagebox.showerror("错误", str(e))
 
+
 def update_usage_label():
-    global lock_request, status_label, current_mode
+    global is_locked, lock_request, status_label, current_mode, whitelist
     config = load_config(current_mode)
     current_time = datetime.now().strftime("%H:%M:%S")
     in_lock_period = check_lock_time(
@@ -323,14 +146,22 @@ def update_usage_label():
         status = "当前在免锁定时段外（应锁屏）" if in_lock_period else "当前在免锁定时段内（不锁屏）"
     else:
         status = "当前在锁定时段内（应锁屏）" if in_lock_period else "当前不在锁定时段内"
-    status_label.config(text=f"当前时间：{current_time}\n{status}")
+    wl = config.get("whitelist", [])
+    fg_name = get_foreground_process_name()
+    wl_status = f"前台进程：{fg_name}" if fg_name else ""
+    if fg_name and fg_name in [normalize_process_name(w) for w in wl if w]:
+        wl_status += "（白名单）"
+    status_label.config(text=f"当前时间：{current_time}\n{status}\n{wl_status}")
     if lock_request and not is_locked:
         lock_duration, password = lock_request
         lock_request = None
-        lock_computer(lock_duration, password)
+        is_locked = True
+        lock_computer(lock_duration, password, root, current_mode,
+                      lambda: toggle_monitoring() if is_monitoring else None)
+        is_locked = False
     root.after(1000, update_usage_label)
 
-# Load config
+
 migrate_old_config()
 config = load_config("lock_period")
 
@@ -338,7 +169,6 @@ root = tk.Tk()
 root.title("电脑锁定设置")
 root.eval('tk::PlaceWindow . center')
 
-# 设置ttk样式
 style = ttk.Style()
 style.configure("Accent.TButton", font=("Arial", 12, "bold"), padding=10)
 
@@ -357,6 +187,7 @@ mode_combo = ttk.Combobox(root, values=["锁定时段内", "锁定时段外"], s
 mode_combo.set("锁定时段内")
 mode_combo.grid(row=2, column=1, padx=10, pady=5, sticky="w")
 
+
 def on_mode_change(event):
     global current_mode
     new_mode = "lock_period" if mode_combo.get() == "锁定时段内" else "unlock_period"
@@ -364,9 +195,12 @@ def on_mode_change(event):
         current_mode = new_mode
         load_settings_from_config()
 
+
 mode_combo.bind("<<ComboboxSelected>>", on_mode_change)
 
+
 def load_settings_from_config():
+    global whitelist
     cfg = load_config(current_mode)
     lock_entry.delete(0, tk.END)
     lock_entry.insert(0, str(cfg.get("lock_duration", 10)))
@@ -380,7 +214,12 @@ def load_settings_from_config():
     period2_start_entry.insert(0, cfg.get("period2_start", "08:00"))
     period2_end_entry.delete(0, tk.END)
     period2_end_entry.insert(0, cfg.get("period2_end", "09:00"))
+    whitelist = cfg.get("whitelist", [])
+    whitelist_box.delete(0, tk.END)
+    for p in whitelist:
+        whitelist_box.insert(tk.END, p)
     lock_entry.focus_set()
+
 
 ttk.Label(root, text="锁定时段1 开始：").grid(row=3, column=0, padx=10, pady=5)
 period1_start_entry = ttk.Entry(root, width=10)
@@ -408,9 +247,62 @@ toggle_button.grid(row=7, column=0, columnspan=2, pady=10)
 status_label = ttk.Label(root, text="", font=("Arial", 12))
 status_label.grid(row=8, column=0, columnspan=2, pady=5)
 
+whitelist = config.get("whitelist", [])
+wl_frame = ttk.LabelFrame(root, text="Process Whitelist", padding=5)
+wl_frame.grid(row=9, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+
+wl_list_frame = ttk.Frame(wl_frame)
+wl_list_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+whitelist_box = tk.Listbox(wl_list_frame, height=5, width=25)
+whitelist_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+wl_scrollbar = ttk.Scrollbar(wl_list_frame, orient=tk.VERTICAL, command=whitelist_box.yview)
+wl_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+whitelist_box.config(yscrollcommand=wl_scrollbar.set)
+
+for p in whitelist:
+    whitelist_box.insert(tk.END, p)
+
+wl_btn_frame = ttk.Frame(wl_frame)
+wl_btn_frame.pack(side=tk.RIGHT, padx=(10, 0), fill=tk.Y)
+
+whitelist_entry = ttk.Entry(wl_btn_frame, width=20)
+whitelist_entry.pack(pady=(0, 5))
+whitelist_entry.insert(0, "chrome.exe")
+
+
+def add_whitelist():
+    global whitelist
+    name = normalize_process_name(whitelist_entry.get())
+    if name:
+        whitelist.append(name)
+        whitelist_box.insert(tk.END, name)
+        whitelist_entry.delete(0, tk.END)
+
+
+def remove_whitelist():
+    global whitelist
+    sel = whitelist_box.curselection()
+    if sel:
+        idx = sel[0]
+        whitelist_box.delete(idx)
+        whitelist.pop(idx)
+
+
+def add_current_process():
+    name = get_foreground_process_name()
+    if name:
+        whitelist_entry.delete(0, tk.END)
+        whitelist_entry.insert(0, name)
+
+
+ttk.Button(wl_btn_frame, text="Add", command=add_whitelist).pack(pady=2, fill=tk.X)
+ttk.Button(wl_btn_frame, text="Remove", command=remove_whitelist).pack(pady=2, fill=tk.X)
+ttk.Button(wl_btn_frame, text="Add Current", command=add_current_process).pack(pady=2, fill=tk.X)
+
 if config["password"]:
     toggle_monitoring()
 
-update_usage_label()  # start updating the usage label
+update_usage_label()
 
 root.mainloop()
