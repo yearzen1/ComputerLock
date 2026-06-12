@@ -273,7 +273,7 @@ whitelist_entry.insert(0, "chrome.exe")
 
 def add_whitelist():
     global whitelist
-    name = normalize_process_name(whitelist_entry.get())
+    name = whitelist_entry.get().strip().strip('"')
     if name:
         whitelist.append(name)
         whitelist_box.insert(tk.END, name)
