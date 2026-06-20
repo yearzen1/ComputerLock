@@ -1,9 +1,7 @@
 import time
 import threading
 import tkinter as tk
-from tkinter import messagebox
-import ttkbootstrap as ttk
-from ttkbootstrap.constants import *
+from tkinter import messagebox, ttk
 from datetime import datetime
 
 from config import migrate_old_config, load_config, save_config, load_shared_config, save_shared_config, reset_daily_tasks_if_new_day
@@ -222,15 +220,13 @@ migrate_old_config()
 config = load_config("lock_period")
 load_shared_settings()
 
-root = ttk.Window(themename="darkly")
+root = tk.Tk()
 root.title("电脑锁定设置")
 root.minsize(420, 300)
 root.grid_rowconfigure(0, weight=1)
 root.grid_columnconfigure(0, weight=1)
 
-theme_bg = ttk.Style().colors.bg
-
-canvas = tk.Canvas(root, highlightthickness=0, bg=theme_bg)
+canvas = tk.Canvas(root, highlightthickness=0)
 scrollbar = ttk.Scrollbar(root, orient="vertical", command=canvas.yview)
 canvas.configure(yscrollcommand=scrollbar.set)
 
@@ -250,6 +246,9 @@ inner_id = canvas.create_window((0, 0), window=scrollable_frame, anchor="n")
 def _on_mousewheel(event):
     canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+style = ttk.Style()
+style.configure("Accent.TButton", font=("Arial", 12, "bold"), padding=10)
 
 inner = ttk.Frame(scrollable_frame)
 inner.grid(row=0, column=0)
@@ -324,7 +323,7 @@ period2_end_entry = ttk.Entry(inner, width=10)
 period2_end_entry.insert(0, config.get("period2_end", "09:00"))
 period2_end_entry.grid(row=6, column=1, padx=10, pady=5, sticky="w")
 
-toggle_button = ttk.Button(inner, text="开始监控", command=toggle_monitoring, bootstyle=PRIMARY)
+toggle_button = ttk.Button(inner, text="开始监控", command=toggle_monitoring)
 toggle_button.grid(row=7, column=0, columnspan=2, pady=10)
 
 status_label = ttk.Label(inner, text="", font=("Arial", 12))
@@ -337,9 +336,7 @@ wl_frame.grid(row=9, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
 wl_list_frame = ttk.Frame(wl_frame)
 wl_list_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-whitelist_box = tk.Listbox(wl_list_frame, height=4, width=25,
-                           bg="#303030", fg="#ffffff",
-                           selectbackground="#375a7f", selectforeground="#ffffff")
+whitelist_box = tk.Listbox(wl_list_frame, height=4, width=25)
 whitelist_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 wl_scrollbar = ttk.Scrollbar(wl_list_frame, orient=tk.VERTICAL, command=whitelist_box.yview)
 wl_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -387,9 +384,9 @@ def add_current_process():
         whitelist_entry.insert(0, name)
 
 
-ttk.Button(wl_btn_frame, text="Add", command=add_whitelist, bootstyle=SUCCESS).pack(pady=2, fill=tk.X)
-ttk.Button(wl_btn_frame, text="Remove", command=remove_whitelist, bootstyle=WARNING).pack(pady=2, fill=tk.X)
-ttk.Button(wl_btn_frame, text="Add Current", command=add_current_process, bootstyle=INFO).pack(pady=2, fill=tk.X)
+ttk.Button(wl_btn_frame, text="Add", command=add_whitelist).pack(pady=2, fill=tk.X)
+ttk.Button(wl_btn_frame, text="Remove", command=remove_whitelist).pack(pady=2, fill=tk.X)
+ttk.Button(wl_btn_frame, text="Add Current", command=add_current_process).pack(pady=2, fill=tk.X)
 
 daily_tasks_frame = ttk.LabelFrame(inner, text="Daily Tasks", padding=5)
 daily_tasks_frame.grid(row=10, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
@@ -397,9 +394,7 @@ daily_tasks_frame.grid(row=10, column=0, columnspan=2, padx=10, pady=5, sticky="
 daily_tasks_list_frame = ttk.Frame(daily_tasks_frame)
 daily_tasks_list_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-daily_tasks_box = tk.Listbox(daily_tasks_list_frame, height=4, width=25,
-                              bg="#303030", fg="#ffffff",
-                              selectbackground="#375a7f", selectforeground="#ffffff")
+daily_tasks_box = tk.Listbox(daily_tasks_list_frame, height=4, width=25)
 daily_tasks_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 dt_scrollbar = ttk.Scrollbar(daily_tasks_list_frame, orient=tk.VERTICAL, command=daily_tasks_box.yview)
 dt_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -414,9 +409,9 @@ daily_task_entry = ttk.Entry(dt_btn_frame, width=20)
 daily_task_entry.pack(pady=(0, 5))
 daily_task_entry.insert(0, "New task")
 
-ttk.Button(dt_btn_frame, text="Toggle", command=toggle_daily_task, bootstyle=SECONDARY).pack(pady=2, fill=tk.X)
-ttk.Button(dt_btn_frame, text="Add Task", command=add_daily_task, bootstyle=SUCCESS).pack(pady=2, fill=tk.X)
-ttk.Button(dt_btn_frame, text="Remove Task", command=remove_daily_task, bootstyle=WARNING).pack(pady=2, fill=tk.X)
+ttk.Button(dt_btn_frame, text="Toggle", command=toggle_daily_task).pack(pady=2, fill=tk.X)
+ttk.Button(dt_btn_frame, text="Add Task", command=add_daily_task).pack(pady=2, fill=tk.X)
+ttk.Button(dt_btn_frame, text="Remove Task", command=remove_daily_task).pack(pady=2, fill=tk.X)
 
 if config["password"]:
     toggle_monitoring()

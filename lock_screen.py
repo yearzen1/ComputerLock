@@ -1,7 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
-import ttkbootstrap as tb
-from ttkbootstrap.constants import *
+from tkinter import ttk
 import subprocess
 from datetime import datetime
 import ctypes
@@ -156,7 +154,7 @@ def lock_computer(duration, password, root, on_unlock_callback):
         uninstall_keyboard_block()
         lock_window.destroy()
 
-    button = tb.Button(main_frame, text="Unlock", command=try_unlock, bootstyle=SUCCESS)
+    button = ttk.Button(main_frame, text="Unlock", command=try_unlock, style="Accent.TButton")
     button.pack(pady=(0, 10))
 
     wl_config = shared.get("whitelist", [])
