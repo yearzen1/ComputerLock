@@ -1,4 +1,5 @@
 import tkinter as tk
+import tkinter.ttk as ttk
 import subprocess
 from datetime import datetime
 import ctypes
@@ -31,8 +32,21 @@ def ask_password(parent, title, prompt):
     dialog.grab_set()
     tk.Label(dialog, text=prompt, bg="#222222", fg="#ffffff",
              font=("Arial", 12)).pack(pady=15)
-    entry = tk.Entry(dialog, show='*', bg="#333333", fg="#ffffff",
-                     insertbackground="#ffffff", relief=tk.FLAT, font=("Arial", 11))
+    pw_style = ttk.Style()
+    pw_style.configure("Dark.TEntry", fieldbackground="#333333",
+                       foreground="#ffffff", insertcolor="#ffffff",
+                       selectbackground="#2c3e50", selectforeground="#ffffff")
+    pw_style.layout("Dark.TEntry",
+        [("Entry.field", {"sticky": "nswe", "children":
+            [("Entry.padding", {"sticky": "nswe", "children":
+                [("Entry.textarea", {"sticky": "nswe"})]
+            })]
+        })]
+    )
+    pw_style.map("Dark.TEntry",
+        fieldbackground=[("focus", "#333333"), ("!focus", "#333333")],
+        foreground=[("focus", "#ffffff"), ("!focus", "#ffffff")])
+    entry = ttk.Entry(dialog, show='*', style="Dark.TEntry")
     entry.pack(pady=5, ipady=4, padx=30, fill=tk.X)
     result = [None]
     def on_ok():
