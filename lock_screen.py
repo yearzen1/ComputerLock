@@ -110,8 +110,10 @@ def lock_computer(duration, password, root, on_unlock_callback):
         tasks_frame = tk.Frame(main_frame, bg="#000000")
         tasks_frame.pack(pady=(0, 10))
 
+        task_vars = []
         for idx, task in enumerate(daily_tasks):
             var = tk.BooleanVar(value=task["done"])
+            task_vars.append(var)
             def make_cmd(i):
                 def cmd():
                     config.toggle_daily_task(i)
