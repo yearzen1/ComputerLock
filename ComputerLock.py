@@ -170,6 +170,7 @@ def update_usage_label():
         lock_computer(lock_duration, password, root,
                       lambda: toggle_monitoring() if is_monitoring else None)
         is_locked = False
+        load_settings_from_config()
     root.after(1000, update_usage_label)
 
 
