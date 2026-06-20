@@ -92,3 +92,71 @@ def reset_daily_tasks_if_new_day(shared_cfg):
         save_shared_config(shared_cfg)
         return True
     return False
+
+
+# ---------------------------------------------------------------------------
+# Atomic shared-data API — single source of truth is the JSON file on disk
+# ---------------------------------------------------------------------------
+
+def get_daily_tasks():
+    return load_shared_config().get("daily_tasks", [])
+
+
+def toggle_daily_task(index):
+    shared = load_shared_config()
+    tasks = shared.get("daily_tasks", [])
+    if 0 <= index < len(tasks):
+        tasks[index]["done"] = not tasks[index]["done"]
+        shared["daily_tasks"] = tasks
+        save_shared_config(shared)
+
+
+def add_daily_task(text):
+    shared = load_shared_config()
+    tasks = shared.get("daily_tasks", [])
+    tasks.append({"text": text, "done": False})
+    shared["daily_tasks"] = tasks
+    save_shared_config(shared)
+
+
+def remove_daily_task(index):
+    shared = load_shared_config()
+    tasks = shared.get("daily_tasks", [])
+    if 0 <= index < len(tasks):
+        tasks.pop(index)
+        shared["daily_tasks"] = tasks
+        save_shared_config(shared)
+
+
+def get_whitelist():
+    return load_shared_config().get("whitelist", [])
+
+
+def add_to_whitelist(name):
+    shared = load_shared_config()
+    wl = shared.get("whitelist", [])
+    wl.append(name)
+    shared["whitelist"] = wl
+    save_shared_config(shared)
+
+
+def remove_from_whitelist(index):
+    shared = load_shared_config()
+    wl = shared.get("whitelist", [])
+    if 0 <= index < len(wl):
+        wl.pop(index)
+        shared["whitelist"] = wl
+        save_shared_config(shared)
+
+
+def reset_daily_tasks():
+    shared = load_shared_config()
+    today = datetime.now().strftime("%Y-%m-%d")
+    stored_date = shared.get("daily_tasks_date", "")
+    if stored_date != today:
+        for task in shared.get("daily_tasks", []):
+            task["done"] = False
+        shared["daily_tasks_date"] = today
+        save_shared_config(shared)
+        return True
+    return False

@@ -3,7 +3,8 @@ from tkinter import ttk
 import subprocess
 from datetime import datetime
 import ctypes
-from config import load_config, load_shared_config, save_shared_config, reset_daily_tasks_if_new_day
+from config import load_config
+import config
 from process_util import (
     SELF_EXE, normalize_process_name, get_foreground_process_name,
     install_keyboard_block, uninstall_keyboard_block, bring_window_to_front
@@ -99,9 +100,8 @@ def lock_computer(duration, password, root, on_unlock_callback):
     label = tk.Label(main_frame, text="This computer is locked\nEnter password to unlock", font=("Arial", 14, "bold"), fg="#ffffff", bg="#000000")
     label.pack(pady=(0, 10))
 
-    shared = load_shared_config()
-    reset_daily_tasks_if_new_day(shared)
-    daily_tasks = shared.get("daily_tasks", [])
+    config.reset_daily_tasks()
+    daily_tasks = config.get_daily_tasks()
 
     if daily_tasks:
         tasks_title = tk.Label(main_frame, text="Daily Tasks", font=("Arial", 14, "bold"), fg="#00ff00", bg="#000000")
@@ -110,22 +110,18 @@ def lock_computer(duration, password, root, on_unlock_callback):
         tasks_frame = tk.Frame(main_frame, bg="#000000")
         tasks_frame.pack(pady=(0, 10))
 
-        def make_toggle_cmd(task, var):
-            def cmd():
-                task["done"] = var.get()
-                cfg = load_shared_config()
-                cfg["daily_tasks"] = daily_tasks
-                save_shared_config(cfg)
-                error_label.config(text="")
-            return cmd
-
-        for task in daily_tasks:
+        for idx, task in enumerate(daily_tasks):
             var = tk.BooleanVar(value=task["done"])
+            def make_cmd(i):
+                def cmd():
+                    config.toggle_daily_task(i)
+                    error_label.config(text="")
+                return cmd
             cb = tk.Checkbutton(tasks_frame, text=task["text"], variable=var,
                                 font=("Arial", 12), fg="#ffffff", bg="#000000",
                                 selectcolor="#000000", activebackground="#333333",
                                 activeforeground="#ffffff",
-                                command=make_toggle_cmd(task, var))
+                                command=make_cmd(idx))
             cb.pack(anchor="w", padx=30)
 
     timer_label = tk.Label(main_frame, text="", font=("Arial", 14), fg="#ffffff", bg="#000000")
@@ -137,7 +133,8 @@ def lock_computer(duration, password, root, on_unlock_callback):
 
     def try_unlock():
         error_label.config(text="")
-        if not all(t["done"] for t in daily_tasks):
+        tasks = config.get_daily_tasks()
+        if not all(t["done"] for t in tasks):
             error_label.config(text="Please complete all daily tasks")
             return
         pwd = ask_password(lock_window, "Unlock", "Enter password:")
@@ -157,7 +154,7 @@ def lock_computer(duration, password, root, on_unlock_callback):
     button = ttk.Button(main_frame, text="Unlock", command=try_unlock, style="Accent.TButton")
     button.pack(pady=(0, 10))
 
-    wl_config = shared.get("whitelist", [])
+    wl_config = config.get_whitelist()
     wl_names_lower = [normalize_process_name(w) for w in wl_config if w]
     if wl_config:
         wl_title = tk.Label(main_frame, text="Whitelisted Apps", font=("Arial", 12, "bold"), fg="#aaaaaa", bg="#000000")

@@ -4,7 +4,8 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from datetime import datetime
 
-from config import migrate_old_config, load_config, save_config, load_shared_config, save_shared_config, reset_daily_tasks_if_new_day
+from config import migrate_old_config, load_config, save_config
+import config
 from process_util import (
     SELF_EXE, normalize_process_name, get_foreground_process_name,
     is_whitelisted_foreground
@@ -17,8 +18,6 @@ monitor_thread = None
 stop_event = threading.Event()
 lock_request = None
 current_mode = "lock_period"
-whitelist = []
-daily_tasks = []
 
 
 def check_lock_time(period1_start, period1_end, period2_start, period2_end, mode="lock_period"):
@@ -63,15 +62,14 @@ def monitor_activity():
     global is_locked, lock_request, current_mode
 
     while not stop_event.is_set():
-        config = load_config(current_mode)
-        shared = load_shared_config()
-        p1_start = config.get("period1_start", "22:00")
-        p1_end = config.get("period1_end", "23:00")
-        p2_start = config.get("period2_start", "08:00")
-        p2_end = config.get("period2_end", "09:00")
-        lock_duration = config.get("lock_duration", 10) * 60
-        password = config.get("password", "")
-        wl = shared.get("whitelist", [])
+        cfg = load_config(current_mode)
+        p1_start = cfg.get("period1_start", "22:00")
+        p1_end = cfg.get("period1_end", "23:00")
+        p2_start = cfg.get("period2_start", "08:00")
+        p2_end = cfg.get("period2_end", "09:00")
+        lock_duration = cfg.get("lock_duration", 10) * 60
+        password = cfg.get("password", "")
+        wl = config.get_whitelist()
 
         if check_lock_time(p1_start, p1_end, p2_start, p2_end, current_mode) and not is_locked:
             if is_whitelisted_foreground(wl):
@@ -83,16 +81,8 @@ def monitor_activity():
             time.sleep(60)
 
 
-def save_shared_to_disk():
-    global whitelist, daily_tasks
-    shared = load_shared_config()
-    shared["whitelist"] = whitelist
-    shared["daily_tasks"] = daily_tasks
-    save_shared_config(shared)
-
-
 def toggle_monitoring():
-    global is_monitoring, monitor_thread, lock_entry, pwd_entry, toggle_button, period1_start_entry, period1_end_entry, period2_start_entry, period2_end_entry, mode_combo, current_mode, whitelist, daily_tasks
+    global is_monitoring, monitor_thread, lock_entry, pwd_entry, toggle_button, period1_start_entry, period1_end_entry, period2_start_entry, period2_end_entry, mode_combo, current_mode
     try:
         lock_min = int(lock_entry.get())
         pwd = pwd_entry.get()
@@ -120,7 +110,6 @@ def toggle_monitoring():
             "period2_end": p2_end,
         }
         save_config(config, current_mode)
-        save_shared_to_disk()
 
         if not is_monitoring:
             stop_event.clear()
@@ -142,22 +131,21 @@ def toggle_monitoring():
 
 
 def update_usage_label():
-    global is_locked, lock_request, status_label, current_mode, whitelist
-    config = load_config(current_mode)
+    global is_locked, lock_request, status_label, current_mode
+    cfg = load_config(current_mode)
     current_time = datetime.now().strftime("%H:%M:%S")
     in_lock_period = check_lock_time(
-        config.get("period1_start", "22:00"),
-        config.get("period1_end", "23:00"),
-        config.get("period2_start", "08:00"),
-        config.get("period2_end", "09:00"),
+        cfg.get("period1_start", "22:00"),
+        cfg.get("period1_end", "23:00"),
+        cfg.get("period2_start", "08:00"),
+        cfg.get("period2_end", "09:00"),
         current_mode
     )
     if current_mode == "unlock_period":
         status = "当前在免锁定时段外（应锁屏）" if in_lock_period else "当前在免锁定时段内（不锁屏）"
     else:
         status = "当前在锁定时段内（应锁屏）" if in_lock_period else "当前不在锁定时段内"
-    shared = load_shared_config()
-    wl = shared.get("whitelist", [])
+    wl = config.get_whitelist()
     fg_name = get_foreground_process_name()
     wl_status = f"前台进程：{fg_name}" if fg_name else ""
     if fg_name and fg_name in [normalize_process_name(w) for w in wl if w]:
@@ -175,17 +163,12 @@ def update_usage_label():
 
 
 def load_shared_settings():
-    global whitelist, daily_tasks
-    shared = load_shared_config()
-    reset_daily_tasks_if_new_day(shared)
-    whitelist = shared.get("whitelist", [])
-    daily_tasks = shared.get("daily_tasks", [])
-    return shared
+    config.reset_daily_tasks()
 
 
 def rebuild_daily_tasks_listbox():
     daily_tasks_box.delete(0, tk.END)
-    for task in daily_tasks:
+    for task in config.get_daily_tasks():
         prefix = "✓" if task["done"] else " "
         daily_tasks_box.insert(tk.END, f"[{prefix}] {task['text']}")
 
@@ -193,32 +176,27 @@ def rebuild_daily_tasks_listbox():
 def toggle_daily_task():
     sel = daily_tasks_box.curselection()
     if sel:
-        idx = sel[0]
-        daily_tasks[idx]["done"] = not daily_tasks[idx]["done"]
+        config.toggle_daily_task(sel[0])
         rebuild_daily_tasks_listbox()
-        save_shared_to_disk()
 
 
 def add_daily_task():
     text = daily_task_entry.get().strip()
     if text:
-        daily_tasks.append({"text": text, "done": False})
+        config.add_daily_task(text)
         rebuild_daily_tasks_listbox()
-        save_shared_to_disk()
         daily_task_entry.delete(0, tk.END)
 
 
 def remove_daily_task():
     sel = daily_tasks_box.curselection()
     if sel:
-        idx = sel[0]
-        daily_tasks_box.delete(idx)
-        daily_tasks.pop(idx)
-        save_shared_to_disk()
+        config.remove_daily_task(sel[0])
+        rebuild_daily_tasks_listbox()
 
 
 migrate_old_config()
-config = load_config("lock_period")
+cfg_init = load_config("lock_period")
 load_shared_settings()
 
 root = tk.Tk()
@@ -256,12 +234,12 @@ inner.grid(row=0, column=0)
 
 ttk.Label(inner, text="锁定持续时间（分钟）：").grid(row=0, column=0, padx=10, pady=5, sticky="e")
 lock_entry = ttk.Entry(inner)
-lock_entry.insert(0, str(config["lock_duration"]))
+lock_entry.insert(0, str(cfg_init["lock_duration"]))
 lock_entry.grid(row=0, column=1, padx=10, pady=5, sticky="w")
 
 ttk.Label(inner, text="密码：").grid(row=1, column=0, padx=10, pady=5, sticky="e")
 pwd_entry = ttk.Entry(inner, show='*')
-pwd_entry.insert(0, config["password"])
+pwd_entry.insert(0, cfg_init["password"])
 pwd_entry.grid(row=1, column=1, padx=10, pady=5, sticky="w")
 
 ttk.Label(inner, text="锁定模式：").grid(row=2, column=0, padx=10, pady=5, sticky="e")
@@ -282,7 +260,6 @@ mode_combo.bind("<<ComboboxSelected>>", on_mode_change)
 
 
 def load_settings_from_config():
-    global whitelist
     cfg = load_config(current_mode)
     lock_entry.delete(0, tk.END)
     lock_entry.insert(0, str(cfg.get("lock_duration", 10)))
@@ -298,7 +275,7 @@ def load_settings_from_config():
     period2_end_entry.insert(0, cfg.get("period2_end", "09:00"))
     load_shared_settings()
     whitelist_box.delete(0, tk.END)
-    for p in whitelist:
+    for p in config.get_whitelist():
         whitelist_box.insert(tk.END, p)
     rebuild_daily_tasks_listbox()
     lock_entry.focus_set()
@@ -306,22 +283,22 @@ def load_settings_from_config():
 
 ttk.Label(inner, text="锁定时段1 开始：").grid(row=3, column=0, padx=10, pady=5, sticky="e")
 period1_start_entry = ttk.Entry(inner, width=10)
-period1_start_entry.insert(0, config.get("period1_start", "22:00"))
+period1_start_entry.insert(0, cfg_init.get("period1_start", "22:00"))
 period1_start_entry.grid(row=3, column=1, padx=10, pady=5, sticky="w")
 
 ttk.Label(inner, text="锁定时段1 结束：").grid(row=4, column=0, padx=10, pady=5, sticky="e")
 period1_end_entry = ttk.Entry(inner, width=10)
-period1_end_entry.insert(0, config.get("period1_end", "23:00"))
+period1_end_entry.insert(0, cfg_init.get("period1_end", "23:00"))
 period1_end_entry.grid(row=4, column=1, padx=10, pady=5, sticky="w")
 
 ttk.Label(inner, text="锁定时段2 开始：").grid(row=5, column=0, padx=10, pady=5, sticky="e")
 period2_start_entry = ttk.Entry(inner, width=10)
-period2_start_entry.insert(0, config.get("period2_start", "08:00"))
+period2_start_entry.insert(0, cfg_init.get("period2_start", "08:00"))
 period2_start_entry.grid(row=5, column=1, padx=10, pady=5, sticky="w")
 
 ttk.Label(inner, text="锁定时段2 结束：").grid(row=6, column=0, padx=10, pady=5, sticky="e")
 period2_end_entry = ttk.Entry(inner, width=10)
-period2_end_entry.insert(0, config.get("period2_end", "09:00"))
+period2_end_entry.insert(0, cfg_init.get("period2_end", "09:00"))
 period2_end_entry.grid(row=6, column=1, padx=10, pady=5, sticky="w")
 
 toggle_button = ttk.Button(inner, text="开始监控", command=toggle_monitoring)
@@ -330,7 +307,6 @@ toggle_button.grid(row=7, column=0, columnspan=2, pady=10)
 status_label = ttk.Label(inner, text="", font=("Arial", 12))
 status_label.grid(row=8, column=0, columnspan=2, pady=5)
 
-whitelist = load_shared_config().get("whitelist", [])
 wl_frame = ttk.LabelFrame(inner, text="Process Whitelist", padding=5)
 wl_frame.grid(row=9, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
 
@@ -343,7 +319,7 @@ wl_scrollbar = ttk.Scrollbar(wl_list_frame, orient=tk.VERTICAL, command=whitelis
 wl_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 whitelist_box.config(yscrollcommand=wl_scrollbar.set)
 
-for p in whitelist:
+for p in config.get_whitelist():
     whitelist_box.insert(tk.END, p)
 
 wl_btn_frame = ttk.Frame(wl_frame)
@@ -354,28 +330,20 @@ whitelist_entry.pack(pady=(0, 5))
 whitelist_entry.insert(0, "chrome.exe")
 
 
-def _save_whitelist_to_disk():
-    save_shared_to_disk()
-
-
 def add_whitelist():
-    global whitelist
     name = whitelist_entry.get().strip().strip('"')
     if name:
-        whitelist.append(name)
-        whitelist_box.insert(tk.END, name)
+        config.add_to_whitelist(name)
         whitelist_entry.delete(0, tk.END)
-        _save_whitelist_to_disk()
+        whitelist_box.insert(tk.END, name)
 
 
 def remove_whitelist():
-    global whitelist
     sel = whitelist_box.curselection()
     if sel:
         idx = sel[0]
         whitelist_box.delete(idx)
-        whitelist.pop(idx)
-        _save_whitelist_to_disk()
+        config.remove_from_whitelist(idx)
 
 
 def add_current_process():
@@ -414,7 +382,7 @@ ttk.Button(dt_btn_frame, text="Toggle", command=toggle_daily_task).pack(pady=2, 
 ttk.Button(dt_btn_frame, text="Add Task", command=add_daily_task).pack(pady=2, fill=tk.X)
 ttk.Button(dt_btn_frame, text="Remove Task", command=remove_daily_task).pack(pady=2, fill=tk.X)
 
-if config["password"]:
+if cfg_init["password"]:
     toggle_monitoring()
 
 update_usage_label()
