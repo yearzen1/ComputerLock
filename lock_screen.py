@@ -1,9 +1,9 @@
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 import subprocess
 from datetime import datetime
 import ctypes
-from config import load_config
+from config import load_config, load_shared_config, save_shared_config, reset_daily_tasks_if_new_day
 from process_util import (
     SELF_EXE, normalize_process_name, get_foreground_process_name,
     install_keyboard_block, uninstall_keyboard_block, bring_window_to_front
@@ -49,7 +49,7 @@ def ask_password(parent, title, prompt):
     return result[0]
 
 
-def lock_computer(duration, password, root, mode, on_unlock_callback):
+def lock_computer(duration, password, root, on_unlock_callback):
     install_keyboard_block()
     lock_window = tk.Toplevel(root)
 
@@ -96,13 +96,50 @@ def lock_computer(duration, password, root, mode, on_unlock_callback):
     lock_label = tk.Label(main_frame, text="🔒", font=("Arial", 48), bg="#000000", fg="#ffffff")
     lock_label.pack(pady=(0, 10))
 
-    label = tk.Label(main_frame, text="This computer is locked\nEnter password to unlock", font=("Arial", 16, "bold"), fg="#ffffff", bg="#000000")
-    label.pack(pady=(0, 20))
+    label = tk.Label(main_frame, text="This computer is locked\nEnter password to unlock", font=("Arial", 14, "bold"), fg="#ffffff", bg="#000000")
+    label.pack(pady=(0, 10))
+
+    shared = load_shared_config()
+    reset_daily_tasks_if_new_day(shared)
+    daily_tasks = shared.get("daily_tasks", [])
+
+    if daily_tasks:
+        tasks_title = tk.Label(main_frame, text="Daily Tasks", font=("Arial", 14, "bold"), fg="#00ff00", bg="#000000")
+        tasks_title.pack(pady=(5, 5))
+
+        tasks_frame = tk.Frame(main_frame, bg="#000000")
+        tasks_frame.pack(pady=(0, 10))
+
+        def make_toggle_cmd(task, var):
+            def cmd():
+                task["done"] = var.get()
+                cfg = load_shared_config()
+                cfg["daily_tasks"] = daily_tasks
+                save_shared_config(cfg)
+                error_label.config(text="")
+            return cmd
+
+        for task in daily_tasks:
+            var = tk.BooleanVar(value=task["done"])
+            cb = tk.Checkbutton(tasks_frame, text=task["text"], variable=var,
+                                font=("Arial", 12), fg="#ffffff", bg="#000000",
+                                selectcolor="#000000", activebackground="#333333",
+                                activeforeground="#ffffff",
+                                command=make_toggle_cmd(task, var))
+            cb.pack(anchor="w", padx=30)
 
     timer_label = tk.Label(main_frame, text="", font=("Arial", 14), fg="#ffffff", bg="#000000")
-    timer_label.pack(pady=(0, 20))
+    timer_label.pack(pady=(0, 10))
+
+    error_label = tk.Label(main_frame, text="", font=("Arial", 12, "bold"),
+                           fg="#ff4444", bg="#000000")
+    error_label.pack(pady=(0, 10))
 
     def try_unlock():
+        error_label.config(text="")
+        if not all(t["done"] for t in daily_tasks):
+            error_label.config(text="Please complete all daily tasks")
+            return
         pwd = ask_password(lock_window, "Unlock", "Enter password:")
         if pwd == password:
             uninstall_keyboard_block()
@@ -111,7 +148,7 @@ def lock_computer(duration, password, root, mode, on_unlock_callback):
                 root.deiconify()
             on_unlock_callback()
         else:
-            messagebox.showerror("Error", "Incorrect password.")
+            error_label.config(text="Incorrect password.")
 
     def on_lockDestroy():
         uninstall_keyboard_block()
@@ -120,7 +157,7 @@ def lock_computer(duration, password, root, mode, on_unlock_callback):
     button = ttk.Button(main_frame, text="Unlock", command=try_unlock, style="Accent.TButton")
     button.pack(pady=(0, 10))
 
-    wl_config = load_config(mode).get("whitelist", [])
+    wl_config = shared.get("whitelist", [])
     wl_names_lower = [normalize_process_name(w) for w in wl_config if w]
     if wl_config:
         wl_title = tk.Label(main_frame, text="Whitelisted Apps", font=("Arial", 12, "bold"), fg="#aaaaaa", bg="#000000")
@@ -130,7 +167,7 @@ def lock_computer(duration, password, root, mode, on_unlock_callback):
         for entry in wl_config:
             name = entry.strip().rstrip('.exe').split('\\')[-1].split('/')[-1]
             def launch_and_hide(path=entry):
-                nonlocal lock_window_hidden
+                nonlocal lock_window_hidden, _check_id
                 log(f"WHITELIST_LAUNCH path={path}")
                 if not lock_window_hidden:
                     lock_window_hidden = True
@@ -141,6 +178,9 @@ def lock_computer(duration, password, root, mode, on_unlock_callback):
                 if not bring_window_to_front(exe):
                     subprocess.Popen(path, shell=False)
                     log(f"WHITELIST_LAUNCH started new: {exe}")
+                if _check_id is not None:
+                    lock_window.after_cancel(_check_id)
+                _check_id = lock_window.after(3000, check_foreground)
             tk.Button(wl_btn_frame_inner, text=name, font=("Arial", 11),
                       fg="#ffffff", bg="#333333", activebackground="#555555",
                       relief=tk.FLAT, padx=12, pady=4,
@@ -148,9 +188,10 @@ def lock_computer(duration, password, root, mode, on_unlock_callback):
                       ).pack(side=tk.LEFT, padx=4)
 
     lock_window_hidden = False
+    _check_id = None
 
     def check_foreground():
-        nonlocal lock_window_hidden
+        nonlocal lock_window_hidden, _check_id
         fg_name = get_foreground_process_name()
         is_whitelisted = fg_name is not None and fg_name in wl_names_lower
         log(f"CHECK_FG fg_name={fg_name} whitelisted={is_whitelisted} hidden={lock_window_hidden}")
@@ -167,7 +208,7 @@ def lock_computer(duration, password, root, mode, on_unlock_callback):
             lock_window.attributes("-topmost", True)
             lock_window.lift()
             log(f"CHECK_FG -> show (non-whitelisted: {fg_name})")
-        lock_window.after(1000, check_foreground)
+        _check_id = lock_window.after(1000, check_foreground)
 
     check_foreground()
 
