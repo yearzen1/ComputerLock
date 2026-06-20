@@ -20,8 +20,9 @@ def log(msg):
 def ask_password(parent, title, prompt):
     dialog = tk.Toplevel(parent)
     dialog.title(title)
-    window_width = 300
-    window_height = 150
+    dialog.configure(bg="#222222")
+    window_width = 350
+    window_height = 200
     screen_width = dialog.winfo_screenwidth()
     screen_height = dialog.winfo_screenheight()
     x = (screen_width - window_width) // 2
@@ -29,9 +30,11 @@ def ask_password(parent, title, prompt):
     dialog.geometry(f"{window_width}x{window_height}+{x}+{y}")
     dialog.transient(parent)
     dialog.grab_set()
-    ttk.Label(dialog, text=prompt).pack(pady=10)
-    entry = ttk.Entry(dialog, show='*')
-    entry.pack(pady=5)
+    tk.Label(dialog, text=prompt, bg="#222222", fg="#ffffff",
+             font=("Arial", 12)).pack(pady=15)
+    entry = tk.Entry(dialog, show='*', bg="#333333", fg="#ffffff",
+                     insertbackground="#ffffff", relief=tk.FLAT, font=("Arial", 11))
+    entry.pack(pady=5, ipady=4, padx=30, fill=tk.X)
     result = [None]
     def on_ok():
         result[0] = entry.get()
@@ -41,10 +44,16 @@ def ask_password(parent, title, prompt):
         dialog.destroy()
     entry.bind("<Return>", lambda e: on_ok())
     entry.focus_set()
-    frame = ttk.Frame(dialog)
-    frame.pack(pady=10)
-    ttk.Button(frame, text="OK", command=on_ok).pack(side=tk.LEFT, padx=5)
-    ttk.Button(frame, text="Cancel", command=on_cancel).pack(side=tk.LEFT, padx=5)
+    frame = tk.Frame(dialog, bg="#222222")
+    frame.pack(pady=15)
+    tk.Button(frame, text="OK", command=on_ok, bg="#2c3e50", fg="#ffffff",
+              relief=tk.FLAT, padx=20, pady=4, cursor="hand2",
+              activebackground="#34495e", activeforeground="#ffffff"
+              ).pack(side=tk.LEFT, padx=8)
+    tk.Button(frame, text="Cancel", command=on_cancel, bg="#555555", fg="#ffffff",
+              relief=tk.FLAT, padx=20, pady=4, cursor="hand2",
+              activebackground="#666666", activeforeground="#ffffff"
+              ).pack(side=tk.LEFT, padx=8)
     parent.wait_window(dialog)
     return result[0]
 
