@@ -222,7 +222,7 @@ migrate_old_config()
 config = load_config("lock_period")
 load_shared_settings()
 
-root = ttk.Window(themename="flatly")
+root = ttk.Window(themename="darkly")
 root.title("电脑锁定设置")
 root.minsize(420, 300)
 root.grid_rowconfigure(0, weight=1)
@@ -331,15 +331,15 @@ status_label = ttk.Label(inner, text="", font=("Arial", 12))
 status_label.grid(row=8, column=0, columnspan=2, pady=5)
 
 whitelist = load_shared_config().get("whitelist", [])
-wl_frame = ttk.LabelFrame(inner, text="Process Whitelist")
+wl_frame = ttk.LabelFrame(inner, text="Process Whitelist", padding=5)
 wl_frame.grid(row=9, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
 
 wl_list_frame = ttk.Frame(wl_frame)
 wl_list_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
 whitelist_box = tk.Listbox(wl_list_frame, height=4, width=25,
-                           bg="#ffffff", fg="#212529",
-                           selectbackground="#2c3e50", selectforeground="#ffffff")
+                           bg="#303030", fg="#ffffff",
+                           selectbackground="#375a7f", selectforeground="#ffffff")
 whitelist_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 wl_scrollbar = ttk.Scrollbar(wl_list_frame, orient=tk.VERTICAL, command=whitelist_box.yview)
 wl_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -391,15 +391,15 @@ ttk.Button(wl_btn_frame, text="Add", command=add_whitelist, bootstyle=SUCCESS).p
 ttk.Button(wl_btn_frame, text="Remove", command=remove_whitelist, bootstyle=WARNING).pack(pady=2, fill=tk.X)
 ttk.Button(wl_btn_frame, text="Add Current", command=add_current_process, bootstyle=INFO).pack(pady=2, fill=tk.X)
 
-daily_tasks_frame = ttk.LabelFrame(inner, text="Daily Tasks")
+daily_tasks_frame = ttk.LabelFrame(inner, text="Daily Tasks", padding=5)
 daily_tasks_frame.grid(row=10, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
 
 daily_tasks_list_frame = ttk.Frame(daily_tasks_frame)
 daily_tasks_list_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
 daily_tasks_box = tk.Listbox(daily_tasks_list_frame, height=4, width=25,
-                              bg="#ffffff", fg="#212529",
-                              selectbackground="#2c3e50", selectforeground="#ffffff")
+                              bg="#303030", fg="#ffffff",
+                              selectbackground="#375a7f", selectforeground="#ffffff")
 daily_tasks_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 dt_scrollbar = ttk.Scrollbar(daily_tasks_list_frame, orient=tk.VERTICAL, command=daily_tasks_box.yview)
 dt_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
