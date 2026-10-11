@@ -18,12 +18,12 @@ A Python application that locks your computer during configurable time periods.
 
 ```bash
 pip install keyboard  # 可选，键盘屏蔽需要
-python ComputerLock.py
+python src/ComputerLock.py
 ```
 
 ## 使用 / Usage
 
-1. 运行 `python ComputerLock.py` 打开设置界面
+1. 运行 `python src/ComputerLock.py` 打开设置界面
 2. 选择模式（"锁定时段内" / "锁定时段外"），配置时间段、锁定时长、密码
 3. 添加进程白名单（支持 exe 名或完整路径）
 4. 点击"开始监控"，程序最小化至托盘开始监控
