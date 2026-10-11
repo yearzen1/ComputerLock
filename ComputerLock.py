@@ -1,11 +1,20 @@
+import os
+import sys
 import time
 import threading
 import tkinter as tk
 from tkinter import messagebox, ttk
 from datetime import datetime
 
+if getattr(sys, "frozen", False):
+    APP_DIR = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    APP_DIR = os.path.dirname(os.path.abspath(__file__))
+os.chdir(APP_DIR)
+
 from config import migrate_old_config, load_config, save_config
 import config
+import autostart
 from process_util import (
     SELF_EXE, normalize_process_name, get_foreground_process_name,
     is_whitelisted_foreground
@@ -196,6 +205,12 @@ def remove_daily_task():
 
 
 migrate_old_config()
+if not config.is_autostart_migrated():
+    try:
+        autostart.set_enabled(True)
+        config.mark_autostart_migrated()
+    except OSError:
+        pass
 cfg_init = load_config("lock_period")
 load_shared_settings()
 
@@ -246,6 +261,20 @@ ttk.Label(inner, text="锁定模式：").grid(row=2, column=0, padx=10, pady=5, 
 mode_combo = ttk.Combobox(inner, values=["锁定时段内", "锁定时段外"], state="readonly", width=18)
 mode_combo.set("锁定时段内")
 mode_combo.grid(row=2, column=1, padx=10, pady=5, sticky="w")
+
+autostart_var = tk.BooleanVar(value=autostart.is_enabled())
+
+
+def on_autostart_toggle():
+    try:
+        autostart.set_enabled(autostart_var.get())
+    except OSError as e:
+        messagebox.showerror("错误", f"设置开机自启动失败：{e}")
+        autostart_var.set(autostart.is_enabled())
+
+
+autostart_check = ttk.Checkbutton(inner, text="开机自启动", variable=autostart_var, command=on_autostart_toggle)
+autostart_check.grid(row=7, column=0, columnspan=2, padx=10, pady=5, sticky="w")
 
 
 def on_mode_change(event):
@@ -302,13 +331,13 @@ period2_end_entry.insert(0, cfg_init.get("period2_end", "09:00"))
 period2_end_entry.grid(row=6, column=1, padx=10, pady=5, sticky="w")
 
 toggle_button = ttk.Button(inner, text="开始监控", command=toggle_monitoring)
-toggle_button.grid(row=7, column=0, columnspan=2, pady=10)
+toggle_button.grid(row=8, column=0, columnspan=2, pady=10)
 
 status_label = ttk.Label(inner, text="", font=("Arial", 12))
-status_label.grid(row=8, column=0, columnspan=2, pady=5)
+status_label.grid(row=9, column=0, columnspan=2, pady=5)
 
 wl_frame = ttk.LabelFrame(inner, text="Process Whitelist", padding=5)
-wl_frame.grid(row=9, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+wl_frame.grid(row=10, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
 
 wl_list_frame = ttk.Frame(wl_frame)
 wl_list_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -358,7 +387,7 @@ ttk.Button(wl_btn_frame, text="Remove", command=remove_whitelist).pack(pady=2, f
 ttk.Button(wl_btn_frame, text="Add Current", command=add_current_process).pack(pady=2, fill=tk.X)
 
 daily_tasks_frame = ttk.LabelFrame(inner, text="Daily Tasks", padding=5)
-daily_tasks_frame.grid(row=10, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+daily_tasks_frame.grid(row=11, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
 
 daily_tasks_list_frame = ttk.Frame(daily_tasks_frame)
 daily_tasks_list_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)

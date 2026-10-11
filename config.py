@@ -9,7 +9,7 @@ CONFIG_FILES = {
 SHARED_CONFIG_FILE = "config_shared.json"
 
 DEFAULT_CONFIG = {"lock_duration": 10, "password": "", "period1_start": "22:00", "period1_end": "23:00", "period2_start": "08:00", "period2_end": "09:00"}
-DEFAULT_SHARED_CONFIG = {"whitelist": [], "daily_tasks": [], "daily_tasks_date": ""}
+DEFAULT_SHARED_CONFIG = {"whitelist": [], "daily_tasks": [], "daily_tasks_date": "", "autostart_migrated": False}
 
 
 def get_config_file(mode):
@@ -147,6 +147,16 @@ def remove_from_whitelist(index):
         wl.pop(index)
         shared["whitelist"] = wl
         save_shared_config(shared)
+
+
+def is_autostart_migrated():
+    return load_shared_config().get("autostart_migrated", False)
+
+
+def mark_autostart_migrated():
+    shared = load_shared_config()
+    shared["autostart_migrated"] = True
+    save_shared_config(shared)
 
 
 def reset_daily_tasks():
