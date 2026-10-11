@@ -346,7 +346,9 @@ whitelist_box = tk.Listbox(wl_list_frame, height=4, width=25)
 whitelist_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 wl_scrollbar = ttk.Scrollbar(wl_list_frame, orient=tk.VERTICAL, command=whitelist_box.yview)
 wl_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-whitelist_box.config(yscrollcommand=wl_scrollbar.set)
+wl_hscrollbar = ttk.Scrollbar(wl_list_frame, orient=tk.HORIZONTAL, command=whitelist_box.xview)
+wl_hscrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+whitelist_box.config(yscrollcommand=wl_scrollbar.set, xscrollcommand=wl_hscrollbar.set)
 
 for p in config.get_whitelist():
     whitelist_box.insert(tk.END, p)
@@ -396,7 +398,9 @@ daily_tasks_box = tk.Listbox(daily_tasks_list_frame, height=4, width=25)
 daily_tasks_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 dt_scrollbar = ttk.Scrollbar(daily_tasks_list_frame, orient=tk.VERTICAL, command=daily_tasks_box.yview)
 dt_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-daily_tasks_box.config(yscrollcommand=dt_scrollbar.set)
+dt_hscrollbar = ttk.Scrollbar(daily_tasks_list_frame, orient=tk.HORIZONTAL, command=daily_tasks_box.xview)
+dt_hscrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+daily_tasks_box.config(yscrollcommand=dt_scrollbar.set, xscrollcommand=dt_hscrollbar.set)
 
 rebuild_daily_tasks_listbox()
 

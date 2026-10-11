@@ -34,6 +34,13 @@ def normalize_process_name(name):
     return name.strip().strip('"').rsplit('\\', 1)[-1].rsplit('/', 1)[-1].lower()
 
 
+def display_name(entry):
+    name = entry.strip().split('\\')[-1].split('/')[-1]
+    if name.lower().endswith('.exe'):
+        name = name[:-4]
+    return name
+
+
 def get_foreground_process_name():
     hwnd = ctypes.windll.user32.GetForegroundWindow()
     pid = wintypes.DWORD()

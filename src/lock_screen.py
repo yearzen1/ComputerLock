@@ -6,7 +6,7 @@ import ctypes
 from config import load_config
 import config
 from process_util import (
-    SELF_EXE, normalize_process_name, get_foreground_process_name,
+    SELF_EXE, normalize_process_name, display_name, get_foreground_process_name,
     install_keyboard_block, uninstall_keyboard_block, bring_window_to_front
 )
 
@@ -164,7 +164,7 @@ def lock_computer(duration, password, root, on_unlock_callback):
         wl_btn_frame_inner = tk.Frame(main_frame, bg="#000000")
         wl_btn_frame_inner.pack(pady=(0, 15))
         for entry in wl_config:
-            name = entry.strip().rstrip('.exe').split('\\')[-1].split('/')[-1]
+            name = display_name(entry)
             def launch_and_hide(path=entry):
                 nonlocal lock_window_hidden, _check_id
                 log(f"WHITELIST_LAUNCH path={path}")
