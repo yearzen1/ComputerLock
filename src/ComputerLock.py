@@ -216,51 +216,58 @@ load_shared_settings()
 
 root = tk.Tk()
 root.title("电脑锁定设置")
-root.minsize(420, 300)
-root.grid_rowconfigure(0, weight=1)
-root.grid_columnconfigure(0, weight=1)
-
-canvas = tk.Canvas(root, highlightthickness=0)
-scrollbar = ttk.Scrollbar(root, orient="vertical", command=canvas.yview)
-canvas.configure(yscrollcommand=scrollbar.set)
-
-canvas.grid(row=0, column=0, sticky="nsew")
-scrollbar.grid(row=0, column=1, sticky="ns")
-
-scrollable_frame = ttk.Frame(canvas)
-
-def _frame_configure(event):
-    canvas.configure(scrollregion=canvas.bbox("all"))
-
-scrollable_frame.bind("<Configure>", _frame_configure)
-scrollable_frame.grid_columnconfigure(0, weight=1)
-
-inner_id = canvas.create_window((0, 0), window=scrollable_frame, anchor="n")
-
-def _on_mousewheel(event):
-    canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-canvas.bind_all("<MouseWheel>", _on_mousewheel)
+root.minsize(460, 380)
 
 style = ttk.Style()
 style.configure("Accent.TButton", font=("Arial", 12, "bold"), padding=10)
 
-inner = ttk.Frame(scrollable_frame)
-inner.grid(row=0, column=0)
+notebook = ttk.Notebook(root)
+notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-ttk.Label(inner, text="锁定持续时间（分钟）：").grid(row=0, column=0, padx=10, pady=5, sticky="e")
-lock_entry = ttk.Entry(inner)
+panel_lock = ttk.Frame(notebook, padding=12)
+panel_wl = ttk.Frame(notebook, padding=12)
+panel_dt = ttk.Frame(notebook, padding=12)
+notebook.add(panel_lock, text="  锁定设置  ")
+notebook.add(panel_wl, text="  白名单  ")
+notebook.add(panel_dt, text="  每日任务  ")
+
+panel_lock.grid_columnconfigure(0, weight=1)
+panel_lock.grid_columnconfigure(1, weight=1)
+panel_lock.grid_columnconfigure(2, weight=1)
+
+ttk.Label(panel_lock, text="锁定持续时间（分钟）").grid(row=0, column=0, padx=6, pady=(4, 2), sticky="w")
+lock_entry = ttk.Entry(panel_lock, width=14)
 lock_entry.insert(0, str(cfg_init["lock_duration"]))
-lock_entry.grid(row=0, column=1, padx=10, pady=5, sticky="w")
+lock_entry.grid(row=1, column=0, padx=6, pady=(0, 4), sticky="ew")
 
-ttk.Label(inner, text="密码：").grid(row=1, column=0, padx=10, pady=5, sticky="e")
-pwd_entry = ttk.Entry(inner, show='*')
-pwd_entry.insert(0, cfg_init["password"])
-pwd_entry.grid(row=1, column=1, padx=10, pady=5, sticky="w")
-
-ttk.Label(inner, text="锁定模式：").grid(row=2, column=0, padx=10, pady=5, sticky="e")
-mode_combo = ttk.Combobox(inner, values=["锁定时段内", "锁定时段外"], state="readonly", width=18)
+ttk.Label(panel_lock, text="锁定模式").grid(row=0, column=1, padx=6, pady=(4, 2), sticky="w")
+mode_combo = ttk.Combobox(panel_lock, values=["锁定时段内", "锁定时段外"], state="readonly", width=14)
 mode_combo.set("锁定时段内")
-mode_combo.grid(row=2, column=1, padx=10, pady=5, sticky="w")
+mode_combo.grid(row=1, column=1, columnspan=2, padx=6, pady=(0, 4), sticky="ew")
+
+ttk.Label(panel_lock, text="密码").grid(row=2, column=0, columnspan=3, padx=6, pady=(4, 2), sticky="w")
+pwd_entry = ttk.Entry(panel_lock, show='*', width=24)
+pwd_entry.insert(0, cfg_init["password"])
+pwd_entry.grid(row=3, column=0, columnspan=3, padx=6, pady=(0, 6), sticky="ew")
+
+ttk.Label(panel_lock, text="开始时间").grid(row=4, column=1, padx=6, pady=(6, 2), sticky="w")
+ttk.Label(panel_lock, text="结束时间").grid(row=4, column=2, padx=6, pady=(6, 2), sticky="w")
+
+ttk.Label(panel_lock, text="时段1").grid(row=5, column=0, padx=6, pady=3, sticky="w")
+period1_start_entry = ttk.Entry(panel_lock, width=8)
+period1_start_entry.insert(0, cfg_init.get("period1_start", "22:00"))
+period1_start_entry.grid(row=5, column=1, padx=6, pady=3, sticky="ew")
+period1_end_entry = ttk.Entry(panel_lock, width=8)
+period1_end_entry.insert(0, cfg_init.get("period1_end", "23:00"))
+period1_end_entry.grid(row=5, column=2, padx=6, pady=3, sticky="ew")
+
+ttk.Label(panel_lock, text="时段2").grid(row=6, column=0, padx=6, pady=3, sticky="w")
+period2_start_entry = ttk.Entry(panel_lock, width=8)
+period2_start_entry.insert(0, cfg_init.get("period2_start", "08:00"))
+period2_start_entry.grid(row=6, column=1, padx=6, pady=3, sticky="ew")
+period2_end_entry = ttk.Entry(panel_lock, width=8)
+period2_end_entry.insert(0, cfg_init.get("period2_end", "09:00"))
+period2_end_entry.grid(row=6, column=2, padx=6, pady=3, sticky="ew")
 
 autostart_var = tk.BooleanVar(value=autostart.is_enabled())
 
@@ -273,8 +280,8 @@ def on_autostart_toggle():
         autostart_var.set(autostart.is_enabled())
 
 
-autostart_check = ttk.Checkbutton(inner, text="开机自启动", variable=autostart_var, command=on_autostart_toggle)
-autostart_check.grid(row=7, column=0, columnspan=2, padx=10, pady=5, sticky="w")
+autostart_check = ttk.Checkbutton(panel_lock, text="开机自启动", variable=autostart_var, command=on_autostart_toggle)
+autostart_check.grid(row=7, column=0, columnspan=3, padx=6, pady=(6, 2), sticky="w")
 
 
 def on_mode_change(event):
@@ -310,54 +317,35 @@ def load_settings_from_config():
     lock_entry.focus_set()
 
 
-ttk.Label(inner, text="锁定时段1 开始：").grid(row=3, column=0, padx=10, pady=5, sticky="e")
-period1_start_entry = ttk.Entry(inner, width=10)
-period1_start_entry.insert(0, cfg_init.get("period1_start", "22:00"))
-period1_start_entry.grid(row=3, column=1, padx=10, pady=5, sticky="w")
+status_label = ttk.Label(panel_lock, text="", font=("Arial", 11), anchor="w", justify="left")
+status_label.grid(row=8, column=0, columnspan=3, padx=6, pady=(6, 2), sticky="ew")
 
-ttk.Label(inner, text="锁定时段1 结束：").grid(row=4, column=0, padx=10, pady=5, sticky="e")
-period1_end_entry = ttk.Entry(inner, width=10)
-period1_end_entry.insert(0, cfg_init.get("period1_end", "23:00"))
-period1_end_entry.grid(row=4, column=1, padx=10, pady=5, sticky="w")
+toggle_button = ttk.Button(panel_lock, text="开始监控", command=toggle_monitoring)
+toggle_button.grid(row=9, column=0, columnspan=3, padx=6, pady=(8, 2), sticky="ew", ipady=2)
 
-ttk.Label(inner, text="锁定时段2 开始：").grid(row=5, column=0, padx=10, pady=5, sticky="e")
-period2_start_entry = ttk.Entry(inner, width=10)
-period2_start_entry.insert(0, cfg_init.get("period2_start", "08:00"))
-period2_start_entry.grid(row=5, column=1, padx=10, pady=5, sticky="w")
+ttk.Label(panel_wl, text="白名单程序位于前台时锁屏自动隐藏", foreground="#888888").pack(anchor="w", pady=(0, 8))
 
-ttk.Label(inner, text="锁定时段2 结束：").grid(row=6, column=0, padx=10, pady=5, sticky="e")
-period2_end_entry = ttk.Entry(inner, width=10)
-period2_end_entry.insert(0, cfg_init.get("period2_end", "09:00"))
-period2_end_entry.grid(row=6, column=1, padx=10, pady=5, sticky="w")
+wl_main = ttk.Frame(panel_wl)
+wl_main.pack(fill=tk.BOTH, expand=True)
 
-toggle_button = ttk.Button(inner, text="开始监控", command=toggle_monitoring)
-toggle_button.grid(row=8, column=0, columnspan=2, pady=10)
-
-status_label = ttk.Label(inner, text="", font=("Arial", 12))
-status_label.grid(row=9, column=0, columnspan=2, pady=5)
-
-wl_frame = ttk.LabelFrame(inner, text="Process Whitelist", padding=5)
-wl_frame.grid(row=10, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
-
-wl_list_frame = ttk.Frame(wl_frame)
-wl_list_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-whitelist_box = tk.Listbox(wl_list_frame, height=4, width=25)
-whitelist_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-wl_scrollbar = ttk.Scrollbar(wl_list_frame, orient=tk.VERTICAL, command=whitelist_box.yview)
-wl_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-wl_hscrollbar = ttk.Scrollbar(wl_list_frame, orient=tk.HORIZONTAL, command=whitelist_box.xview)
+whitelist_box = tk.Listbox(wl_main, height=10, width=32)
+wl_hscrollbar = ttk.Scrollbar(wl_main, orient=tk.HORIZONTAL, command=whitelist_box.xview)
 wl_hscrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+wl_scrollbar = ttk.Scrollbar(wl_main, orient=tk.VERTICAL, command=whitelist_box.yview)
+wl_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+whitelist_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 whitelist_box.config(yscrollcommand=wl_scrollbar.set, xscrollcommand=wl_hscrollbar.set)
 
 for p in config.get_whitelist():
     whitelist_box.insert(tk.END, p)
 
-wl_btn_frame = ttk.Frame(wl_frame)
-wl_btn_frame.pack(side=tk.RIGHT, padx=(10, 0), fill=tk.Y)
+wl_ctrl = ttk.Frame(panel_wl)
+wl_ctrl.pack(fill=tk.X, pady=(8, 0))
+wl_ctrl_inner = ttk.Frame(wl_ctrl)
+wl_ctrl_inner.pack(anchor="center")
 
-whitelist_entry = ttk.Entry(wl_btn_frame, width=20)
-whitelist_entry.pack(pady=(0, 5))
+whitelist_entry = ttk.Entry(wl_ctrl_inner, width=28)
+whitelist_entry.pack(pady=(0, 6))
 whitelist_entry.insert(0, "chrome.exe")
 
 
@@ -384,36 +372,37 @@ def add_current_process():
         whitelist_entry.insert(0, name)
 
 
-ttk.Button(wl_btn_frame, text="Add", command=add_whitelist).pack(pady=2, fill=tk.X)
-ttk.Button(wl_btn_frame, text="Remove", command=remove_whitelist).pack(pady=2, fill=tk.X)
-ttk.Button(wl_btn_frame, text="Add Current", command=add_current_process).pack(pady=2, fill=tk.X)
+ttk.Button(wl_ctrl_inner, text="Add", command=add_whitelist).pack(side=tk.LEFT, padx=3)
+ttk.Button(wl_ctrl_inner, text="Remove", command=remove_whitelist).pack(side=tk.LEFT, padx=3)
+ttk.Button(wl_ctrl_inner, text="Add Current", command=add_current_process).pack(side=tk.LEFT, padx=3)
 
-daily_tasks_frame = ttk.LabelFrame(inner, text="Daily Tasks", padding=5)
-daily_tasks_frame.grid(row=11, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+ttk.Label(panel_dt, text="锁屏时需完成全部每日任务才能解锁", foreground="#888888").pack(anchor="w", pady=(0, 8))
 
-daily_tasks_list_frame = ttk.Frame(daily_tasks_frame)
-daily_tasks_list_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+dt_main = ttk.Frame(panel_dt)
+dt_main.pack(fill=tk.BOTH, expand=True)
 
-daily_tasks_box = tk.Listbox(daily_tasks_list_frame, height=4, width=25)
-daily_tasks_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-dt_scrollbar = ttk.Scrollbar(daily_tasks_list_frame, orient=tk.VERTICAL, command=daily_tasks_box.yview)
-dt_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-dt_hscrollbar = ttk.Scrollbar(daily_tasks_list_frame, orient=tk.HORIZONTAL, command=daily_tasks_box.xview)
+daily_tasks_box = tk.Listbox(dt_main, height=10, width=32)
+dt_hscrollbar = ttk.Scrollbar(dt_main, orient=tk.HORIZONTAL, command=daily_tasks_box.xview)
 dt_hscrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+dt_scrollbar = ttk.Scrollbar(dt_main, orient=tk.VERTICAL, command=daily_tasks_box.yview)
+dt_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+daily_tasks_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 daily_tasks_box.config(yscrollcommand=dt_scrollbar.set, xscrollcommand=dt_hscrollbar.set)
 
 rebuild_daily_tasks_listbox()
 
-dt_btn_frame = ttk.Frame(daily_tasks_frame)
-dt_btn_frame.pack(side=tk.RIGHT, padx=(10, 0), fill=tk.Y)
+dt_ctrl = ttk.Frame(panel_dt)
+dt_ctrl.pack(fill=tk.X, pady=(8, 0))
+dt_ctrl_inner = ttk.Frame(dt_ctrl)
+dt_ctrl_inner.pack(anchor="center")
 
-daily_task_entry = ttk.Entry(dt_btn_frame, width=20)
-daily_task_entry.pack(pady=(0, 5))
+daily_task_entry = ttk.Entry(dt_ctrl_inner, width=28)
+daily_task_entry.pack(pady=(0, 6))
 daily_task_entry.insert(0, "New task")
 
-ttk.Button(dt_btn_frame, text="Toggle", command=toggle_daily_task).pack(pady=2, fill=tk.X)
-ttk.Button(dt_btn_frame, text="Add Task", command=add_daily_task).pack(pady=2, fill=tk.X)
-ttk.Button(dt_btn_frame, text="Remove Task", command=remove_daily_task).pack(pady=2, fill=tk.X)
+ttk.Button(dt_ctrl_inner, text="Toggle", command=toggle_daily_task).pack(side=tk.LEFT, padx=3)
+ttk.Button(dt_ctrl_inner, text="Add Task", command=add_daily_task).pack(side=tk.LEFT, padx=3)
+ttk.Button(dt_ctrl_inner, text="Remove Task", command=remove_daily_task).pack(side=tk.LEFT, padx=3)
 
 if cfg_init["password"]:
     toggle_monitoring()
@@ -421,7 +410,9 @@ if cfg_init["password"]:
 update_usage_label()
 
 root.update_idletasks()
-root.geometry(f"{root.winfo_reqwidth() + 40}x{min(root.winfo_reqheight() + 40, 780)}")
+_w = min(root.winfo_reqwidth() + 40, root.winfo_screenwidth() - 80)
+_h = min(root.winfo_reqheight() + 40, root.winfo_screenheight() - 120)
+root.geometry(f"{_w}x{_h}")
 root.eval('tk::PlaceWindow . center')
 
 root.mainloop()
