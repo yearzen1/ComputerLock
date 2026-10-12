@@ -76,7 +76,6 @@ def monitor_activity():
         p1_end = cfg.get("period1_end", "23:00")
         p2_start = cfg.get("period2_start", "08:00")
         p2_end = cfg.get("period2_end", "09:00")
-        lock_duration = cfg.get("lock_duration", 10) * 60
         password = cfg.get("password", "")
         wl = config.get_whitelist()
 
@@ -84,16 +83,15 @@ def monitor_activity():
             if is_whitelisted_foreground(wl):
                 time.sleep(60)
             else:
-                lock_request = (lock_duration, password)
+                lock_request = password
                 time.sleep(70)
         else:
             time.sleep(60)
 
 
 def toggle_monitoring():
-    global is_monitoring, monitor_thread, lock_entry, pwd_entry, toggle_button, period1_start_entry, period1_end_entry, period2_start_entry, period2_end_entry, mode_combo, current_mode
+    global is_monitoring, monitor_thread, pwd_entry, toggle_button, period1_start_entry, period1_end_entry, period2_start_entry, period2_end_entry, mode_combo, current_mode
     try:
-        lock_min = int(lock_entry.get())
         pwd = pwd_entry.get()
         p1_start = period1_start_entry.get()
         p1_end = period1_end_entry.get()
@@ -109,9 +107,7 @@ def toggle_monitoring():
             if t:
                 parse_time(t)
 
-        lock_duration = lock_min * 60
         config = {
-            "lock_duration": lock_min,
             "password": pwd,
             "period1_start": p1_start,
             "period1_end": p1_end,
@@ -161,10 +157,10 @@ def update_usage_label():
         wl_status += "（白名单）"
     status_label.config(text=f"当前时间：{current_time}\n{status}\n{wl_status}")
     if lock_request and not is_locked:
-        lock_duration, password = lock_request
+        password = lock_request
         lock_request = None
         is_locked = True
-        lock_computer(lock_duration, password, root,
+        lock_computer(password, root,
                       lambda: toggle_monitoring() if is_monitoring else None)
         is_locked = False
         load_settings_from_config()
@@ -235,15 +231,10 @@ panel_lock.grid_columnconfigure(0, weight=1)
 panel_lock.grid_columnconfigure(1, weight=1)
 panel_lock.grid_columnconfigure(2, weight=1)
 
-ttk.Label(panel_lock, text="锁定持续时间（分钟）").grid(row=0, column=0, padx=6, pady=(4, 2), sticky="w")
-lock_entry = ttk.Entry(panel_lock, width=14)
-lock_entry.insert(0, str(cfg_init["lock_duration"]))
-lock_entry.grid(row=1, column=0, padx=6, pady=(0, 4), sticky="ew")
-
-ttk.Label(panel_lock, text="锁定模式").grid(row=0, column=1, padx=6, pady=(4, 2), sticky="w")
+ttk.Label(panel_lock, text="锁定模式").grid(row=0, column=0, padx=6, pady=(4, 2), sticky="w")
 mode_combo = ttk.Combobox(panel_lock, values=["锁定时段内", "锁定时段外"], state="readonly", width=14)
 mode_combo.set("锁定时段内")
-mode_combo.grid(row=1, column=1, columnspan=2, padx=6, pady=(0, 4), sticky="ew")
+mode_combo.grid(row=1, column=0, columnspan=3, padx=6, pady=(0, 4), sticky="ew")
 
 ttk.Label(panel_lock, text="密码").grid(row=2, column=0, columnspan=3, padx=6, pady=(4, 2), sticky="w")
 pwd_entry = ttk.Entry(panel_lock, show='*', width=24)
@@ -297,8 +288,6 @@ mode_combo.bind("<<ComboboxSelected>>", on_mode_change)
 
 def load_settings_from_config():
     cfg = load_config(current_mode)
-    lock_entry.delete(0, tk.END)
-    lock_entry.insert(0, str(cfg.get("lock_duration", 10)))
     pwd_entry.delete(0, tk.END)
     pwd_entry.insert(0, cfg.get("password", ""))
     period1_start_entry.delete(0, tk.END)
@@ -314,7 +303,7 @@ def load_settings_from_config():
     for p in config.get_whitelist():
         whitelist_box.insert(tk.END, p)
     rebuild_daily_tasks_listbox()
-    lock_entry.focus_set()
+    pwd_entry.focus_set()
 
 
 status_label = ttk.Label(panel_lock, text="", font=("Arial", 11), anchor="w", justify="left")

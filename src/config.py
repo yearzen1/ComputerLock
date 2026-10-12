@@ -8,7 +8,7 @@ CONFIG_FILES = {
 }
 SHARED_CONFIG_FILE = "config_shared.json"
 
-DEFAULT_CONFIG = {"lock_duration": 10, "password": "", "period1_start": "22:00", "period1_end": "23:00", "period2_start": "08:00", "period2_end": "09:00"}
+DEFAULT_CONFIG = {"password": "", "period1_start": "22:00", "period1_end": "23:00", "period2_start": "08:00", "period2_end": "09:00"}
 DEFAULT_SHARED_CONFIG = {"whitelist": [], "daily_tasks": [], "daily_tasks_date": "", "autostart_migrated": False}
 
 

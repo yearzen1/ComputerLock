@@ -50,7 +50,7 @@ def ask_password(parent, title, prompt):
     return result[0]
 
 
-def lock_computer(duration, password, root, on_unlock_callback):
+def lock_computer(password, root, on_unlock_callback):
     install_keyboard_block()
     lock_window = tk.Toplevel(root)
 
@@ -125,9 +125,6 @@ def lock_computer(duration, password, root, on_unlock_callback):
                                 activeforeground="#ffffff",
                                 command=make_cmd(idx))
             cb.pack(anchor="w", padx=30)
-
-    timer_label = tk.Label(main_frame, text="", font=("Arial", 14), fg="#ffffff", bg="#000000")
-    timer_label.pack(pady=(0, 10))
 
     error_label = tk.Label(main_frame, text="", font=("Arial", 12, "bold"),
                            fg="#ff4444", bg="#000000")
@@ -210,21 +207,6 @@ def lock_computer(duration, password, root, on_unlock_callback):
         _check_id = lock_window.after(1000, check_foreground)
 
     check_foreground()
-
-    remaining = duration
-    def update_timer():
-        nonlocal remaining
-        if remaining > 0:
-            mins = remaining // 60
-            secs = remaining % 60
-            timer_label.config(text=f"Auto-unlock in {mins}m {secs}s")
-            remaining -= 1
-            lock_window.after(1000, update_timer)
-        else:
-            uninstall_keyboard_block()
-            lock_window.destroy()
-
-    update_timer()
 
     while lock_window.winfo_exists():
         lock_window.update()
