@@ -172,7 +172,7 @@ def lock_computer(password, root, on_unlock_callback):
         if pwd == password:
             uninstall_keyboard_block()
             lock_window.destroy()
-            if root.state() == 'iconic':
+            if root.state() in ('iconic', 'withdrawn'):
                 root.deiconify()
             on_unlock_callback()
         else:

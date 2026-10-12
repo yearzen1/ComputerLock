@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import threading
+import queue
 import tkinter as tk
 from tkinter import messagebox, ttk
 from datetime import datetime
@@ -20,6 +21,7 @@ from process_util import (
     is_whitelisted_foreground
 )
 from lock_screen import lock_computer
+from tray_icon import create_icon
 
 is_locked = False
 is_monitoring = False
@@ -27,6 +29,8 @@ monitor_thread = None
 stop_event = threading.Event()
 lock_request = None
 current_mode = "lock_period"
+tray_actions = queue.Queue()
+tray_icon_instance = None
 
 
 def check_lock_time(period1_start, period1_end, period2_start, period2_end, mode="lock_period"):
@@ -89,6 +93,53 @@ def monitor_activity():
             time.sleep(60)
 
 
+def hide_to_tray():
+    global tray_icon_instance
+    root.withdraw()
+    if tray_icon_instance is None:
+        tray_icon_instance = create_icon(tray_actions)
+        threading.Thread(target=tray_icon_instance.run, daemon=True).start()
+
+
+def show_from_tray():
+    root.deiconify()
+    root.lift()
+    root.attributes("-topmost", True)
+    root.attributes("-topmost", False)
+    root.focus_force()
+
+
+def quit_app():
+    global tray_icon_instance
+    stop_event.set()
+    if tray_icon_instance is not None:
+        try:
+            tray_icon_instance.stop()
+        except Exception:
+            pass
+        tray_icon_instance = None
+    root.destroy()
+
+
+def poll_tray_queue():
+    try:
+        while True:
+            action = tray_actions.get_nowait()
+            if action == "show":
+                show_from_tray()
+            elif action == "quit":
+                quit_app()
+                return
+    except queue.Empty:
+        pass
+    root.after(200, poll_tray_queue)
+
+
+def on_root_unmap(event):
+    if event.widget is root and root.state() == "iconic":
+        root.after_idle(hide_to_tray)
+
+
 def toggle_monitoring():
     global is_monitoring, monitor_thread, pwd_entry, toggle_button, period1_start_entry, period1_end_entry, period2_start_entry, period2_end_entry, mode_combo, current_mode
     try:
@@ -122,7 +173,7 @@ def toggle_monitoring():
             monitor_thread.start()
             is_monitoring = True
             toggle_button.config(text="停止监控")
-            root.iconify()
+            hide_to_tray()
         else:
             stop_event.set()
             if monitor_thread:
@@ -213,6 +264,8 @@ load_shared_settings()
 root = tk.Tk()
 root.title("电脑锁定设置")
 root.minsize(460, 380)
+root.protocol("WM_DELETE_WINDOW", quit_app)
+root.bind("<Unmap>", on_root_unmap)
 
 style = ttk.Style()
 style.configure("Accent.TButton", font=("Arial", 12, "bold"), padding=10)
@@ -397,6 +450,7 @@ if cfg_init["password"]:
     toggle_monitoring()
 
 update_usage_label()
+root.after(200, poll_tray_queue)
 
 root.update_idletasks()
 _w = min(root.winfo_reqwidth() + 40, root.winfo_screenwidth() - 80)
