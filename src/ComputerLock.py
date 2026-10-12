@@ -21,7 +21,7 @@ from process_util import (
     is_whitelisted_foreground
 )
 from lock_screen import lock_computer
-from tray_icon import create_icon
+from tray_icon import create_icon, png_base64
 
 is_locked = False
 is_monitoring = False
@@ -31,6 +31,7 @@ lock_request = None
 current_mode = "lock_period"
 tray_actions = queue.Queue()
 tray_icon_instance = None
+window_icons = []
 
 
 def check_lock_time(period1_start, period1_end, period2_start, period2_end, mode="lock_period"):
@@ -138,6 +139,12 @@ def poll_tray_queue():
 def on_root_unmap(event):
     if event.widget is root and root.state() == "iconic":
         root.after_idle(hide_to_tray)
+
+
+def set_window_icons():
+    for size in (16, 32, 48, 64):
+        window_icons.append(tk.PhotoImage(data=png_base64(size)))
+    root.iconphoto(True, *window_icons)
 
 
 def toggle_monitoring():
@@ -266,6 +273,7 @@ root.title("电脑锁定设置")
 root.minsize(460, 380)
 root.protocol("WM_DELETE_WINDOW", quit_app)
 root.bind("<Unmap>", on_root_unmap)
+set_window_icons()
 
 style = ttk.Style()
 style.configure("Accent.TButton", font=("Arial", 12, "bold"), padding=10)

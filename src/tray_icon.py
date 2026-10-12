@@ -1,3 +1,6 @@
+import base64
+import io
+
 import pystray
 from PIL import Image, ImageDraw
 
@@ -38,6 +41,17 @@ def make_handlers(actions):
         "show": lambda: actions.put("show"),
         "quit": lambda: actions.put("quit"),
     }
+
+
+def png_base64(size=ICON_SIZE):
+    buf = io.BytesIO()
+    build_icon_image(size).save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def build_ico(path, sizes=(16, 32, 48, 64, 256)):
+    base = build_icon_image(max(sizes))
+    base.save(path, format="ICO", sizes=[(s, s) for s in sizes])
 
 
 def create_icon(actions):
