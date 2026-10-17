@@ -214,12 +214,21 @@ def update_usage_label():
     if fg_name and fg_name in [normalize_process_name(w) for w in wl if w]:
         wl_status += "（白名单）"
     status_label.config(text=f"当前时间：{current_time}\n{status}\n{wl_status}")
-    if lock_request and not is_locked:
+    if lock_request and not is_locked and in_lock_period:
         password = lock_request
         lock_request = None
         is_locked = True
-        lock_computer(password, root,
-                      lambda: toggle_monitoring() if is_monitoring else None)
+        lock_computer(
+            password, root,
+            lambda: toggle_monitoring() if is_monitoring else None,
+            should_stay_locked=lambda cfg=cfg, mode=current_mode: check_lock_time(
+                cfg.get("period1_start", "22:00"),
+                cfg.get("period1_end", "23:00"),
+                cfg.get("period2_start", "08:00"),
+                cfg.get("period2_end", "09:00"),
+                mode
+            )
+        )
         is_locked = False
         load_settings_from_config()
     root.after(1000, update_usage_label)

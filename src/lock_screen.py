@@ -21,6 +21,12 @@ PALETTE = {
     "chip": "#3a4160",
 }
 
+PERIOD_POLL_MS = 1000
+
+
+def should_auto_unlock(should_stay_locked, dialog_open):
+    return should_stay_locked is not None and not dialog_open and not should_stay_locked()
+
 
 def log(msg):
     with open(LOG_FILE, "a", encoding="utf-8") as f:
@@ -72,7 +78,7 @@ def ask_password(parent, title, prompt):
     return result[0]
 
 
-def lock_computer(password, root, on_unlock_callback):
+def lock_computer(password, root, on_unlock_callback, should_stay_locked=None):
     install_keyboard_block()
     lock_window = tk.Toplevel(root)
 
@@ -163,12 +169,17 @@ def lock_computer(password, root, on_unlock_callback):
     error_label.pack(pady=(0, 8))
 
     def try_unlock():
+        nonlocal unlock_dialog_open
         error_label.config(text="")
         tasks = config.get_daily_tasks()
         if not all(t["done"] for t in tasks):
             error_label.config(text="Please complete all daily tasks")
             return
-        pwd = ask_password(lock_window, "Unlock", "Enter password:")
+        unlock_dialog_open = True
+        try:
+            pwd = ask_password(lock_window, "Unlock", "Enter password:")
+        finally:
+            unlock_dialog_open = False
         if pwd == password:
             uninstall_keyboard_block()
             lock_window.destroy()
@@ -177,10 +188,6 @@ def lock_computer(password, root, on_unlock_callback):
             on_unlock_callback()
         else:
             error_label.config(text="Incorrect password.")
-
-    def on_lockDestroy():
-        uninstall_keyboard_block()
-        lock_window.destroy()
 
     button = tk.Button(card, text="Unlock", command=try_unlock,
                        font=("Segoe UI", 13, "bold"), fg=PALETTE["text"], bg=PALETTE["accent"],
@@ -223,6 +230,8 @@ def lock_computer(password, root, on_unlock_callback):
 
     lock_window_hidden = False
     _check_id = None
+    _lock_check_id = None
+    unlock_dialog_open = False
 
     def check_foreground():
         nonlocal lock_window_hidden, _check_id
@@ -245,6 +254,17 @@ def lock_computer(password, root, on_unlock_callback):
         _check_id = lock_window.after(1000, check_foreground)
 
     check_foreground()
+
+    def check_lock_state():
+        nonlocal _lock_check_id
+        if should_auto_unlock(should_stay_locked, unlock_dialog_open):
+            log(f"AUTO_UNLOCK period ended (now={datetime.now().strftime('%H:%M:%S')})")
+            uninstall_keyboard_block()
+            lock_window.destroy()
+            return
+        _lock_check_id = lock_window.after(PERIOD_POLL_MS, check_lock_state)
+
+    check_lock_state()
 
     while lock_window.winfo_exists():
         lock_window.update()
