@@ -39,3 +39,16 @@ def test_ask_password_uses_dark_palette():
     dialog_src = inspect.getsource(lock_screen.ask_password)
     assert "PALETTE" in dialog_src
     assert "ttk." not in dialog_src
+
+
+def test_foreground_poll_interval_is_two_seconds():
+    assert lock_screen.FG_POLL_MS == 2000
+
+
+def test_period_poll_interval_is_one_second():
+    assert lock_screen.PERIOD_POLL_MS == 1000
+
+
+def test_foreground_poller_uses_the_interval_constant():
+    src = inspect.getsource(lock_screen.lock_computer)
+    assert "after(FG_POLL_MS, check_foreground)" in src
