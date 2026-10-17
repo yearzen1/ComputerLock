@@ -5,6 +5,16 @@ import sys
 
 SELF_EXE = os.path.basename(sys.executable).lower()
 
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+EXE_PATH_BUFFER_SIZE = 32768
+
+ctypes.windll.kernel32.OpenProcess.restype = wintypes.HANDLE
+ctypes.windll.kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+ctypes.windll.kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+ctypes.windll.kernel32.QueryFullProcessImageNameW.argtypes = [
+    wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)
+]
+
 
 class PROCESSENTRY32W(ctypes.Structure):
     _fields_ = [
@@ -41,7 +51,45 @@ def display_name(entry):
     return name
 
 
+def _pid_of_foreground_window():
+    hwnd = ctypes.windll.user32.GetForegroundWindow()
+    if not hwnd:
+        return None
+    pid = wintypes.DWORD()
+    ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    if pid.value == 0:
+        return None
+    return pid.value
+
+
+def _exe_path_of_pid(pid):
+    handle = ctypes.windll.kernel32.OpenProcess(
+        PROCESS_QUERY_LIMITED_INFORMATION, False, pid
+    )
+    if not handle:
+        return None
+    try:
+        size = wintypes.DWORD(EXE_PATH_BUFFER_SIZE)
+        buffer = ctypes.create_unicode_buffer(size.value)
+        if not ctypes.windll.kernel32.QueryFullProcessImageNameW(
+            handle, 0, buffer, ctypes.byref(size)
+        ):
+            return None
+        return buffer.value
+    finally:
+        ctypes.windll.kernel32.CloseHandle(handle)
+
+
 def get_foreground_process_name():
+    pid = _pid_of_foreground_window()
+    if pid is not None:
+        path = _exe_path_of_pid(pid)
+        if path:
+            return normalize_process_name(path)
+    return _get_foreground_process_name_snapshot()
+
+
+def _get_foreground_process_name_snapshot():
     hwnd = ctypes.windll.user32.GetForegroundWindow()
     pid = wintypes.DWORD()
     ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
