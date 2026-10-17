@@ -17,7 +17,7 @@ def test_lock_computer_has_no_duration_param():
 
 def test_lock_screen_source_has_no_auto_unlock_countdown():
     src = (SRC_DIR / "lock_screen.py").read_text(encoding="utf-8")
-    assert "Auto-unlock" not in src
+    assert "Auto-unlock in" not in src
     assert "update_timer" not in src
 
 

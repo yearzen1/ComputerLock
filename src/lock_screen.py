@@ -4,7 +4,6 @@ from datetime import datetime
 import ctypes
 import os
 import time
-from config import load_config
 import config
 from process_util import (
     SELF_EXE, normalize_process_name, display_name, get_foreground_process_name,
