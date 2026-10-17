@@ -2,6 +2,8 @@ import tkinter as tk
 import subprocess
 from datetime import datetime
 import ctypes
+import os
+import time
 from config import load_config
 import config
 from process_util import (
@@ -10,6 +12,8 @@ from process_util import (
 )
 
 LOG_FILE = "lock_debug.log"
+MAX_LOG_BYTES = 5 * 1024 * 1024
+LOG_HEARTBEAT_S = 60
 
 PALETTE = {
     "bg": "#1e1e2e",
@@ -28,9 +32,29 @@ def should_auto_unlock(should_stay_locked, dialog_open):
     return should_stay_locked is not None and not dialog_open and not should_stay_locked()
 
 
-def log(msg):
+_monotonic = time.monotonic
+_last_log_message = None
+_last_log_time = 0.0
+
+
+def log(msg, force=False):
+    global _last_log_message, _last_log_time
+    now = _monotonic()
+    if not force and msg == _last_log_message and (now - _last_log_time) < LOG_HEARTBEAT_S:
+        return
+    _last_log_message = msg
+    _last_log_time = now
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] {msg}\n")
+
+
+def rotate_log_if_needed():
+    try:
+        if not os.path.exists(LOG_FILE) or os.path.getsize(LOG_FILE) <= MAX_LOG_BYTES:
+            return
+        os.replace(LOG_FILE, LOG_FILE + ".old")
+    except OSError:
+        pass
 
 
 def ask_password(parent, title, prompt):
@@ -79,6 +103,7 @@ def ask_password(parent, title, prompt):
 
 
 def lock_computer(password, root, on_unlock_callback, should_stay_locked=None):
+    rotate_log_if_needed()
     install_keyboard_block()
     lock_window = tk.Toplevel(root)
 
@@ -207,16 +232,16 @@ def lock_computer(password, root, on_unlock_callback, should_stay_locked=None):
             name = display_name(entry)
             def launch_and_hide(path=entry):
                 nonlocal lock_window_hidden, _check_id
-                log(f"WHITELIST_LAUNCH path={path}")
+                log(f"WHITELIST_LAUNCH path={path}", force=True)
                 if not lock_window_hidden:
                     lock_window_hidden = True
                     uninstall_keyboard_block()
                     lock_window.withdraw()
-                    log("WHITELIST_LAUNCH window hidden")
+                    log("WHITELIST_LAUNCH window hidden", force=True)
                 exe = normalize_process_name(path)
                 if not bring_window_to_front(exe):
                     subprocess.Popen(path, shell=False)
-                    log(f"WHITELIST_LAUNCH started new: {exe}")
+                    log(f"WHITELIST_LAUNCH started new: {exe}", force=True)
                 if _check_id is not None:
                     lock_window.after_cancel(_check_id)
                 _check_id = lock_window.after(3000, check_foreground)
@@ -242,7 +267,7 @@ def lock_computer(password, root, on_unlock_callback, should_stay_locked=None):
             lock_window_hidden = True
             uninstall_keyboard_block()
             lock_window.withdraw()
-            log("CHECK_FG -> hide (whitelisted foreground)")
+            log("CHECK_FG -> hide (whitelisted foreground)", force=True)
         elif lock_window_hidden and fg_name is not None \
                 and fg_name != SELF_EXE and not is_whitelisted:
             lock_window_hidden = False
@@ -250,7 +275,7 @@ def lock_computer(password, root, on_unlock_callback, should_stay_locked=None):
             lock_window.deiconify()
             lock_window.attributes("-topmost", True)
             lock_window.lift()
-            log(f"CHECK_FG -> show (non-whitelisted: {fg_name})")
+            log(f"CHECK_FG -> show (non-whitelisted: {fg_name})", force=True)
         _check_id = lock_window.after(1000, check_foreground)
 
     check_foreground()
@@ -258,7 +283,7 @@ def lock_computer(password, root, on_unlock_callback, should_stay_locked=None):
     def check_lock_state():
         nonlocal _lock_check_id
         if should_auto_unlock(should_stay_locked, unlock_dialog_open):
-            log(f"AUTO_UNLOCK period ended (now={datetime.now().strftime('%H:%M:%S')})")
+            log(f"AUTO_UNLOCK period ended (now={datetime.now().strftime('%H:%M:%S')})", force=True)
             uninstall_keyboard_block()
             lock_window.destroy()
             return
