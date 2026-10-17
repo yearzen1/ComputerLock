@@ -26,6 +26,7 @@ PALETTE = {
 }
 
 PERIOD_POLL_MS = 1000
+FG_POLL_MS = 2000
 
 
 def should_auto_unlock(should_stay_locked, dialog_open):
@@ -276,7 +277,7 @@ def lock_computer(password, root, on_unlock_callback, should_stay_locked=None):
             lock_window.attributes("-topmost", True)
             lock_window.lift()
             log(f"CHECK_FG -> show (non-whitelisted: {fg_name})", force=True)
-        _check_id = lock_window.after(1000, check_foreground)
+        _check_id = lock_window.after(FG_POLL_MS, check_foreground)
 
     check_foreground()
 
